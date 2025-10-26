@@ -628,21 +628,60 @@ Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
   end.
 
 (*
-  Theorem: Non-consecutive property (ADMITTED)
+  Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
-  The Zeckendorf representation produced by our algorithm contains no
-  two consecutive Fibonacci numbers.
+  This is the defining recurrence relation for Fibonacci numbers.
+*)
+Lemma fib_recurrence : forall k,
+  k >= 2 -> fib k + fib (k - 1) = fib (S k).
+Proof.
+  intros k Hk.
+  destruct k as [|[|k']].
+  - (* k = 0: contradicts k >= 2 *)
+    inversion Hk.
+  - (* k = 1: contradicts k >= 2 *)
+    inversion Hk. inversion H0.
+  - (* k = S (S k') >= 2 *)
+    (* Goal: fib (S (S k')) + fib (S (S k') - 1) = fib (S (S (S k'))) *)
+    (* Simplify: S (S k') - 1 = S k' *)
+    replace (S (S k') - 1) with (S k') by lia.
+    (* Now apply fib_SS to rewrite the right side *)
+    rewrite fib_SS. reflexivity.
+Qed.
 
-  This is a key property of Zeckendorf representations. The greedy algorithm
-  naturally produces non-consecutive Fibonacci numbers because when we pick
-  the largest fib(k) <= n, the remainder n - fib(k) is strictly less than
-  fib(k-1), which can be proven using the identity:
-  fib(k) + fib(k-1) = fib(k+1) and the fact that we chose the largest fib(k) <= n.
+(*
+  Helper lemma: If F_k < n < F_{k+1}, then n - F_k < F_{k-1}
 
-  Proof strategy (not yet implemented):
-  - Show that at each step, if we pick fib(k), then n - fib(k) < fib(k-1)
-  - This ensures the next Fibonacci number we pick has index < k-1
-  - Therefore no two consecutive Fibonacci numbers can appear in the sequence
+  This is the key property that ensures the greedy algorithm produces
+  non-consecutive Fibonacci numbers.
+
+  Proof: Since n < F_{k+1} = F_k + F_{k-1}, we have n - F_k < F_{k-1}.
+*)
+Lemma remainder_less_than_prev_fib : forall n k,
+  k >= 2 ->
+  fib k < n ->
+  n < fib (S k) ->
+  n - fib k < fib (k - 1).
+Proof.
+  intros n k Hk Hlt Hlt'.
+  (* Rewrite fib(k+1) using recurrence relation *)
+  assert (Heq: fib (S k) = fib k + fib (k - 1)).
+  { rewrite <- fib_recurrence by assumption. reflexivity. }
+  (* Now n < fib k + fib(k-1), so n - fib k < fib(k-1) *)
+  rewrite Heq in Hlt'.
+  lia.
+Qed.
+
+(*
+  Theorem: Non-consecutive property (ADMITTED - simplified version)
+
+  For now, we admit this theorem. A complete proof would require:
+  1. Showing that the greedy algorithm picks the largest Fibonacci F_k <= n
+  2. Proving that the remainder n - F_k < F_{k-1}
+  3. Using induction on the fuel to show this property is preserved
+
+  The proof is non-trivial because we need to track the indices of Fibonacci
+  numbers through the algorithm's execution, which requires additional invariants.
 *)
 Theorem zeckendorf_no_consecutive : forall n,
   no_consecutive_fibs (zeckendorf n []).
@@ -663,6 +702,44 @@ Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
   no_consecutive_fibs l.
 
 (*
+  Helper: Find maximum element in a list of nats
+*)
+Fixpoint list_max (l : list nat) : option nat :=
+  match l with
+  | [] => None
+  | [x] => Some x
+  | x :: xs => match list_max xs with
+               | None => Some x
+               | Some m => Some (Nat.max x m)
+               end
+  end.
+
+(*
+  Key Lemma for Uniqueness: Sum bound for non-consecutive Fibonacci numbers
+
+  The sum of any non-empty list of distinct, non-consecutive Fibonacci numbers
+  whose largest member is F_k is strictly less than F_{k+1}.
+
+  Proof strategy:
+  - Use induction on k
+  - Base cases: k = 0, 1, 2 can be verified directly
+  - Inductive case: Consider a list with maximum F_k
+    * If F_{k-1} is not in the list, then the sum of remaining elements (with max < F_{k-1})
+      is < F_k by induction hypothesis
+    * So total sum < F_k + F_{k-1} = F_{k+1}
+    * If F_{k-1} is in the list, this violates the non-consecutive property
+
+  This lemma is crucial for proving uniqueness.
+*)
+Lemma sum_nonconsec_fibs_bounded : forall l k,
+  no_consecutive_fibs l ->
+  (forall x, In x l -> exists i, fib i = x) ->
+  list_max l = Some (fib k) ->
+  sum_list l < fib (S k).
+Proof.
+Admitted.
+
+(*
   Theorem: Uniqueness of Zeckendorf representation (ADMITTED)
 
   Every positive integer has a unique representation as a sum of
@@ -672,18 +749,25 @@ Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
   satisfy the Zeckendorf representation properties for the same number n,
   then they must be equal (up to reordering).
 
-  Proof strategy (not yet implemented):
-  - Use strong induction on n
-  - For the inductive step, suppose n has two different representations
-  - Both must contain the largest Fibonacci number fib(k) <= n
-    (otherwise, we could add it and get a different sum by the greedy property)
-  - After removing fib(k) from both representations, the remainders must
-    represent n - fib(k)
-  - By induction hypothesis, these remainders are equal
-  - Therefore the original representations are equal
+  Proof strategy (following the wiki proof):
+  1. Assume l1 and l2 are both valid Zeckendorf representations of n
+  2. Remove common elements from both to get l1' and l2'
+  3. l1' and l2' still have the same sum (since we removed equal elements)
+  4. Assume by contradiction that both l1' and l2' are non-empty
+  5. Let F_s be the max of l1' and F_t be the max of l2'
+  6. Since l1' and l2' share no elements, F_s ≠ F_t
+  7. WLOG assume F_s < F_t
+  8. By the lemma, sum(l1') < F_{s+1} ≤ F_t ≤ sum(l2')
+  9. This contradicts sum(l1') = sum(l2')
+  10. Therefore either l1' or l2' is empty
+  11. If l1' is empty, it has sum 0, so l2' has sum 0, so l2' is empty
+  12. Thus l1' = l2' = [], which means l1 = l2
 
-  Note: This theorem as stated requires that both lists are sorted in the
-  same order, or we need to define equality up to permutation.
+  Note: This proof requires additional infrastructure for set operations,
+  which is why it remains admitted. A complete formalization would need:
+  - List filtering and difference operations
+  - Properties of these operations preserving the invariants
+  - The sum_nonconsec_fibs_bounded lemma
 *)
 Theorem zeckendorf_unique : forall n l1 l2,
   is_zeckendorf_repr n l1 ->
@@ -695,10 +779,22 @@ Admitted.
 (*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
 
-  Combining our correctness theorem with the uniqueness theorem would show
-  that our algorithm computes the unique Zeckendorf representation.
+  This combines the three properties to show that our algorithm produces
+  a valid Zeckendorf representation:
+  1. All elements are Fibonacci numbers (zeckendorf_fib_property)
+  2. The sum equals n (zeckendorf_sum_property)
+  3. No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
 *)
 Theorem zeckendorf_is_the_unique_repr : forall n,
   is_zeckendorf_repr n (zeckendorf n []).
 Proof.
-Admitted.
+  intro n.
+  unfold is_zeckendorf_repr.
+  split; [|split].
+  - (* Part 1: All elements are Fibonacci numbers *)
+    apply zeckendorf_fib_property.
+  - (* Part 2: Sum equals n *)
+    apply zeckendorf_sum_property.
+  - (* Part 3: No consecutive Fibonacci numbers *)
+    apply zeckendorf_no_consecutive.
+Qed.
