@@ -715,6 +715,85 @@ Fixpoint list_max (l : list nat) : option nat :=
   end.
 
 (*
+  Helper lemma: fib is strictly monotonic on the range [2, ∞)
+
+  If i >= 2, j >= 2, and i < j, then fib(i) < fib(j).
+
+  Proof: By induction on j - i. Base case: if j = i + 1, use fib_mono.
+  Inductive case: use transitivity via fib(j-1).
+*)
+Lemma fib_mono_lt : forall i j,
+  i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
+Proof.
+  intros i j Hi Hj.
+  revert i Hi.
+  induction j as [j' IHj] using lt_wf_ind.
+  intros i Hi Hlt.
+  (* Case split: j = i + 1 or j > i + 1 *)
+  destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
+  - (* j = S i: use fib_mono directly *)
+    subst j'. apply fib_mono. assumption.
+  - (* j > S i: use transitivity *)
+    assert (Hj_gt: j' > S i) by lia.
+    assert (Hpred_ge: j' - 1 >= 2) by lia.
+    assert (Hpred_ge_i: j' - 1 >= i) by lia.
+    destruct (Nat.eq_dec (j' - 1) i) as [Heq_pred | Hneq_pred].
+    + (* j' - 1 = i, so j' = S i, contradicts Hneq *)
+      exfalso. lia.
+    + (* j' - 1 > i *)
+      assert (Hpred_gt: j' - 1 > i) by lia.
+      assert (Hpred_lt: j' - 1 < j') by lia.
+      (* Use IH to get fib i < fib (j' - 1) *)
+      assert (H1: fib i < fib (j' - 1)).
+      { apply IHj; try lia. }
+      (* Use fib_mono to get fib (j' - 1) < fib j' *)
+      assert (H2: fib (j' - 1) < fib j').
+      { replace j' with (S (j' - 1)) at 2 by lia.
+        apply fib_mono. assumption. }
+      (* Combine by transitivity *)
+      lia.
+Qed.
+
+(*
+  Helper: Fibonacci numbers are injective for indices >= 2
+
+  This states that if fib(i) = fib(j) for i,j >= 2, then i = j.
+
+  Proof: Use fib_mono_lt to show that fib is strictly monotonic for n >= 2,
+  which immediately gives us injectivity by trichotomy.
+*)
+Lemma fib_injective : forall i j,
+  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
+Proof.
+  intros i j Hi Hj Heq.
+  (* Use trichotomy: either i < j, i = j, or i > j *)
+  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heq_ij | Hgt]].
+  - (* Case 1: i < j, then fib i < fib j by fib_mono_lt, contradicting Heq *)
+    exfalso.
+    assert (H: fib i < fib j) by (apply fib_mono_lt; assumption).
+    lia.
+  - (* Case 2: i = j *)
+    assumption.
+  - (* Case 3: i > j, then fib j < fib i by fib_mono_lt, contradicting Heq *)
+    exfalso.
+    assert (H: fib j < fib i) by (apply fib_mono_lt; assumption).
+    lia.
+Qed.
+
+(*
+  Helper: If a list has max fib(k) and contains fib(i), then fib(i) <= fib(k)
+
+  This is a property of list_max: all elements are ≤ the maximum.
+*)
+Lemma list_max_fib_bound : forall l k i,
+  list_max l = Some (fib k) ->
+  In (fib i) l ->
+  i >= 1 ->
+  fib i <= fib k.
+Proof.
+Admitted.
+
+(*
   Key Lemma for Uniqueness: Sum bound for non-consecutive Fibonacci numbers
 
   The sum of any non-empty list of distinct, non-consecutive Fibonacci numbers
@@ -724,10 +803,10 @@ Fixpoint list_max (l : list nat) : option nat :=
   - Use induction on k
   - Base cases: k = 0, 1, 2 can be verified directly
   - Inductive case: Consider a list with maximum F_k
-    * If F_{k-1} is not in the list, then the sum of remaining elements (with max < F_{k-1})
-      is < F_k by induction hypothesis
-    * So total sum < F_k + F_{k-1} = F_{k+1}
-    * If F_{k-1} is in the list, this violates the non-consecutive property
+    * Since no consecutive Fibs, fib(k-1) is NOT in the list
+    * Removing fib(k) from list gives a list with max ≤ fib(k-2)
+    * By IH, sum(rest) < fib(k-1)
+    * So total sum = fib(k) + sum(rest) < fib(k) + fib(k-1) = fib(k+1)
 
   This lemma is crucial for proving uniqueness.
 *)
@@ -737,6 +816,18 @@ Lemma sum_nonconsec_fibs_bounded : forall l k,
   list_max l = Some (fib k) ->
   sum_list l < fib (S k).
 Proof.
+  (* This proof requires:
+     1. Induction on k (or on the list structure)
+     2. Base case: singleton list [fib k] has sum fib k < fib (S k)
+     3. Inductive case:
+        - If list has max fib k and other elements
+        - By non-consecutive property, fib(k-1) is NOT in the list
+        - So remaining elements have max ≤ fib(k-2)
+        - By IH, sum(rest) < fib(k-1)
+        - Total sum < fib k + fib(k-1) = fib(S k)
+
+     The full proof requires careful handling of list operations and Fibonacci indices.
+  *)
 Admitted.
 
 (*
