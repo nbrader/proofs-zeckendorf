@@ -5,6 +5,8 @@ Require Import Coq.Wellfounded.Lexicographic_Product.
 Require Import Coq.Wellfounded.Inverse_Image.
 Require Import Coq.Wellfounded.Wellfounded.
 Require Import Coq.Program.Wf.
+Require Import Recdef.
+Require Import Lia.
 Import ListNotations.
 
 Fixpoint fib (n : nat) : nat :=
@@ -125,6 +127,22 @@ Proof.
   apply fib_pos. assumption.
 Qed.
 
+(* Elements in fibs_upto n are <= n *)
+Lemma in_fibs_upto_le : forall x n,
+  In x (fibs_upto n) -> x <= n.
+Proof.
+  intros x n Hin.
+  unfold fibs_upto in Hin.
+  induction (seq 1 (S n)) as [|a l IH].
+  - simpl in Hin. inversion Hin.
+  - simpl in Hin.
+    destruct (Nat.leb (fib a) n) eqn:Hleb.
+    + simpl in Hin. destruct Hin as [Heq | Hin'].
+      * subst x. apply Nat.leb_le. assumption.
+      * apply IH. assumption.
+    + inversion Hin.
+Qed.
+
 Lemma fib_decrease : forall x n, In x (fibs_upto n) -> x > 0 -> x < n -> n - x < n.
 Proof.
   intros x n Hin Hpos Hlt.
@@ -138,33 +156,25 @@ Proof.
   intros. apply in_rev. assumption.
 Qed.
 
-Program Fixpoint zeckendorf (n : nat) (acc : list nat) {measure n} : list nat :=
-  match n with
+Fixpoint zeckendorf_fuel (fuel n : nat) (acc : list nat) : list nat :=
+  match fuel with
   | 0 => acc
-  | _ => let fibs := rev (fibs_upto n) in
-         match fibs with
-         | [] => acc
-         | x :: xs =>
-           match lt_dec x n with
-           | left Hx => zeckendorf (n - x) (x :: acc)
-           | right _ => acc
+  | S fuel' =>
+    match n with
+    | 0 => acc
+    | _ => let fibs := rev (fibs_upto n) in
+           match fibs with
+           | [] => acc
+           | x :: xs =>
+             if Nat.leb x n
+             then zeckendorf_fuel fuel' (n - x) (x :: acc)
+             else acc
            end
-         end
+    end
   end.
-Next Obligation.
-Proof.
-  (* Need to prove: n - x < n *)
-  (* x :: xs = rev (fibs_upto n), so x is in fibs_upto n *)
-  assert (Hin: In x (fibs_upto n)).
-  { apply in_list_rev. rewrite <- Heq_fibs. simpl. left. reflexivity. }
-  (* Therefore x > 0 *)
-  assert (Hpos: x > 0) by (apply (in_fibs_upto_pos x n Hin)).
-  (* We have Hx : x < n and Hpos : x > 0, so n - x < n *)
-  (* Nat.sub_lt : forall n m, m <= n -> 0 < m -> n - m < n *)
-  apply Nat.sub_lt.
-  - apply Nat.lt_le_incl. assumption.
-  - assumption.
-Qed.
+
+Definition zeckendorf (n : nat) (acc : list nat) : list nat :=
+  zeckendorf_fuel n n acc.
 
 (* Define sum of a list *)
 Fixpoint sum_list (l : list nat) : nat :=
@@ -177,37 +187,136 @@ Fixpoint sum_list (l : list nat) : nat :=
 Lemma zeckendorf_0 : forall acc, zeckendorf 0 acc = acc.
 Proof. intro. simpl. reflexivity. Qed.
 
+(* Helper lemmas for zeckendorf_fuel *)
+Lemma zeckendorf_fuel_acc_fib : forall fuel n acc,
+  (forall z, In z acc -> exists k, z = fib k) ->
+  forall z, In z (zeckendorf_fuel fuel n acc) -> exists k, z = fib k.
+Proof.
+  induction fuel as [|fuel' IHfuel].
+  - (* fuel = 0 *)
+    intros n acc Hacc_fib z Hz. simpl in Hz. apply Hacc_fib. exact Hz.
+  - (* fuel = S fuel' *)
+    intros n acc Hacc_fib z Hz.
+    destruct n as [|n'].
+    + (* n = 0 *) simpl in Hz. apply Hacc_fib. exact Hz.
+    + (* n = S n' *)
+      unfold zeckendorf_fuel in Hz. fold zeckendorf_fuel in Hz.
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
+      * (* fibs = [] *)
+        apply Hacc_fib. exact Hz.
+      * (* fibs = x :: xs *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n' *)
+           apply IHfuel in Hz.
+           ++ exact Hz.
+           ++ (* Prove: forall z, In z (x :: acc) -> exists k, z = fib k *)
+              intros w Hin_w. simpl in Hin_w.
+              destruct Hin_w as [Heq | Hin_acc].
+              ** (* w = x *)
+                 subst w.
+                 (* x is in fibs_upto (S n') *)
+                 assert (Hin_x: In x (fibs_upto (S n'))).
+                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
+                 exists k. symmetry. exact Heq_fib.
+              ** (* w in acc *)
+                 apply Hacc_fib. exact Hin_acc.
+        -- (* x > S n' (impossible case) *)
+           (* x is in fibs_upto (S n'), so x <= S n', but Hleb says x > S n' *)
+           exfalso.
+           assert (Hin_x: In x (fibs_upto (S n'))).
+           { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+           assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
+           apply Nat.leb_gt in Hleb. lia.
+Qed.
+
 (* Main strengthened lemmas *)
 Lemma zeckendorf_acc_fib : forall n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
   forall z, In z (zeckendorf n acc) -> exists k, z = fib k.
 Proof.
-  intro n. pattern n. apply lt_wf_ind. clear n.
-  intros n IH acc Hacc_fib z Hz.
-  destruct n as [|n'].
-  - (* n = 0 *)
-    rewrite zeckendorf_0 in Hz. apply Hacc_fib. assumption.
-  - (* n = S n' *)
-    (* Program Fixpoint generates zeckendorf_func with dependent types (existT).
-       Unfolding exposes complex internal representation that doesn't match
-       our expected pattern. This proof would require:
-       - Functional induction scheme for Program Fixpoint
-       - Or rewriting using Function with explicit well-founded recursion
-       - Or extracting Program-generated equations *)
-Admitted.
+  intros n acc Hacc_fib z Hz.
+  unfold zeckendorf in Hz.
+  apply (zeckendorf_fuel_acc_fib n n acc Hacc_fib z Hz).
+Qed.
+
+Lemma zeckendorf_fuel_acc_sum : forall fuel n acc,
+  fuel >= n ->
+  sum_list (zeckendorf_fuel fuel n acc) = sum_list acc + n.
+Proof.
+  induction fuel as [|fuel' IHfuel].
+  - (* fuel = 0 *)
+    intros n acc Hge.
+    assert (Heq: n = 0) by lia. subst n.
+    simpl. lia.
+  - (* fuel = S fuel' *)
+    intros n acc Hge.
+    destruct n as [|n'].
+    + (* n = 0 *) simpl. lia.
+    + (* n = S n' *)
+      unfold zeckendorf_fuel. fold zeckendorf_fuel.
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
+      * (* fibs = [] *)
+        (* This case is impossible: fibs_upto (S n') always contains fib(1)=1 *)
+        exfalso.
+        assert (H1: In 1 (fibs_upto (S n'))).
+        { unfold fibs_upto. simpl.
+          destruct n'; simpl; auto.
+        }
+        assert (H2: In 1 (rev (fibs_upto (S n')))) by (rewrite <- in_rev; exact H1).
+        rewrite Heqfibs in H2. inversion H2.
+      * (* fibs = x :: xs *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n' *)
+           assert (Hle: x <= S n') by (apply Nat.leb_le; assumption).
+           assert (Hin_x: In x (fibs_upto (S n'))).
+           { assert (Hin_rev: In x (rev (fibs_upto (S n')))).
+             { rewrite Heqfibs. left. reflexivity. }
+             apply in_rev in Hin_rev. exact Hin_rev.
+           }
+           assert (Hpos: x > 0) by (apply (in_fibs_upto_pos x (S n') Hin_x)).
+           assert (Hfuel_ge: fuel' >= S n' - x).
+           { destruct (Nat.eq_dec x (S n')) as [Heq_x | Hneq_x].
+             - (* x = S n' *) subst x. rewrite Nat.sub_diag. lia.
+             - (* x < S n' *) assert (Hsub: S n' - x < S n') by (apply Nat.sub_lt; lia). lia.
+           }
+           assert (Heq_sum: sum_list (zeckendorf_fuel fuel' (S n' - x) (x :: acc)) =
+                           sum_list (x :: acc) + (S n' - x)).
+           { apply IHfuel. exact Hfuel_ge. }
+           rewrite Heq_sum.
+           (* Goal: sum_list (x :: acc) + (S n' - x) = sum_list acc + S n' *)
+           unfold sum_list at 1. fold sum_list.
+           (* Goal: (x + sum_list acc) + (S n' - x) = sum_list acc + S n' *)
+           rewrite <- Nat.add_assoc.
+           (* Goal: x + (sum_list acc + (S n' - x)) = sum_list acc + S n' *)
+           rewrite (Nat.add_comm (sum_list acc) (S n' - x)).
+           (* Goal: x + ((S n' - x) + sum_list acc) = sum_list acc + S n' *)
+           rewrite Nat.add_assoc.
+           (* Goal: (x + (S n' - x)) + sum_list acc = sum_list acc + S n' *)
+           rewrite (Nat.add_comm x (S n' - x)).
+           (* Goal: ((S n' - x) + x) + sum_list acc = sum_list acc + S n' *)
+           rewrite Nat.sub_add by exact Hle.
+           (* Goal: S n' + sum_list acc = sum_list acc + S n' *)
+           apply Nat.add_comm.
+        -- (* x > S n' (impossible case) *)
+           (* x is in fibs_upto (S n'), so x <= S n', but Hleb says x > S n' *)
+           exfalso.
+           assert (Hin_x: In x (fibs_upto (S n'))).
+           { assert (Hin_rev: In x (rev (fibs_upto (S n')))).
+             { rewrite Heqfibs. left. reflexivity. }
+             apply in_rev in Hin_rev. exact Hin_rev.
+           }
+           assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
+           apply Nat.leb_gt in Hleb. lia.
+Qed.
 
 Lemma zeckendorf_acc_sum : forall n acc,
   sum_list (zeckendorf n acc) = sum_list acc + n.
 Proof.
-  intro n. pattern n. apply lt_wf_ind. clear n.
-  intros n IH acc.
-  destruct n as [|n'].
-  - (* n = 0 *)
-    rewrite zeckendorf_0. rewrite Nat.add_0_r. reflexivity.
-  - (* n = S n' *)
-    (* Same issue as zeckendorf_acc_fib: Program Fixpoint's internal
-       representation prevents straightforward unfolding and pattern matching. *)
-Admitted.
+  intros n acc.
+  unfold zeckendorf.
+  apply zeckendorf_fuel_acc_sum. lia.
+Qed.
 
 Lemma zeckendorf_acc_correct : forall n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
