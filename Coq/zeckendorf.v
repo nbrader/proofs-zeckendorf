@@ -37,110 +37,201 @@ Proof.
   intro n. destruct n; simpl; reflexivity.
 Qed.
 
-(* Helper lemma: Fibonacci numbers are positive for n >= 1 *)
+(*
+  Helper lemma: Fibonacci numbers are positive for n >= 1
+
+  Proof strategy: Use strong induction (well-founded induction on <).
+  For the base cases (n=1 and n=2), compute directly.
+  For n >= 3, use the recurrence relation fib(n) = fib(n-1) + fib(n-2)
+  and the fact that sum of two positive numbers is positive.
+*)
 Lemma fib_pos : forall n, n >= 1 -> fib n > 0.
 Proof.
   intro n. pattern n. apply lt_wf_ind. clear n.
+  (* IH: induction hypothesis - fib is positive for all smaller values *)
   intros n IH Hge.
+  (* Case split on the structure of n to handle base cases *)
   destruct n as [|[|[|n'']]].
-  - (* n = 0 *) inversion Hge.
-  - (* n = 1 *) compute. auto.
-  - (* n = 2 *) compute. auto.
-  - (* n = S (S (S n'')) = S (S m) where m = S n'' *)
-    rewrite fib_SS. apply Nat.add_pos_pos.
-    + apply IH.
-      * apply Nat.lt_succ_diag_r.
-      * apply le_n_S. apply Nat.le_0_l.
-    + apply IH.
-      * apply Nat.lt_trans with (S (S n'')).
+  - (* Case n = 0: Contradicts assumption n >= 1 *)
+    inversion Hge.
+  - (* Case n = 1: fib(1) = 1 > 0 by computation *)
+    compute. auto.
+  - (* Case n = 2: fib(2) = 1 > 0 by computation *)
+    compute. auto.
+  - (* Case n >= 3: Use recurrence relation fib(n) = fib(n-1) + fib(n-2) *)
+    (* First rewrite using the Fibonacci recurrence *)
+    rewrite fib_SS.
+    (* Show that fib(n-1) + fib(n-2) > 0 by showing both summands are positive *)
+    apply Nat.add_pos_pos.
+    + (* fib(S (S n'')) = fib(n-1) > 0 *)
+      apply IH.
+      * (* n-1 < n (needed for induction hypothesis) *)
+        apply Nat.lt_succ_diag_r.
+      * (* n-1 >= 1 (needed for fib_pos precondition) *)
+        apply le_n_S. apply Nat.le_0_l.
+    + (* fib(S n'') = fib(n-2) > 0 *)
+      apply IH.
+      * (* n-2 < n (needed for induction hypothesis) *)
+        (* This requires two steps: n-2 < n-1 < n *)
+        apply Nat.lt_trans with (S (S n'')).
         -- apply Nat.lt_succ_diag_r.
         -- apply Nat.lt_succ_diag_r.
-      * apply le_n_S. apply Nat.le_0_l.
+      * (* n-2 >= 1 (needed for fib_pos precondition) *)
+        apply le_n_S. apply Nat.le_0_l.
 Qed.
 
-(* Fibonacci sequence is monotonically increasing for n >= 2 *)
+(*
+  Fibonacci sequence is monotonically increasing for n >= 2
+
+  Proof strategy: Use strong induction. Base case n=2 is verified by computation.
+  For n >= 3, we show fib(n) < fib(n+1) by rewriting fib(n+1) = fib(n) + fib(n-1)
+  and noting that fib(n-1) > 0, so fib(n) < fib(n) + fib(n-1).
+*)
 Lemma fib_mono : forall n, n >= 2 -> fib n < fib (S n).
 Proof.
   intro n. pattern n. apply lt_wf_ind. clear n.
   intros n IH Hge.
+  (* Case split on n to handle base cases *)
   destruct n as [|[|[|n'']]].
-  - (* n = 0 *) inversion Hge.
-  - (* n = 1 *) inversion Hge. inversion H0.
-  - (* n = 2: fib 2 < fib 3, i.e., 1 < 2 *) simpl. auto.
-  - (* n = S (S (S n'')), so S n = S (S (S (S n''))) *)
+  - (* Case n = 0: Contradicts n >= 2 *)
+    inversion Hge.
+  - (* Case n = 1: Contradicts n >= 2 (since 1 < 2) *)
+    inversion Hge. inversion H0.
+  - (* Case n = 2: fib(2) < fib(3), i.e., 1 < 2, verified by computation *)
+    simpl. auto.
+  - (* Case n >= 3: Show fib(n) < fib(n+1) using the recurrence relation *)
+    (* First, establish that fib(n-1) > 0, which we'll need later *)
     assert (Hpos: fib (S (S n'')) > 0).
     { apply fib_pos. apply le_n_S. apply Nat.le_0_l. }
-    (* Goal: fib (S (S (S n''))) < fib (S (S (S (S n'')))) *)
-    (* Rewrite RHS using fib_SS *)
+    (* Rewrite fib(n+1) using the Fibonacci recurrence:
+       fib(n+1) = fib(n) + fib(n-1) *)
     assert (Heq: fib (S (S (S (S n'')))) = fib (S (S (S n''))) + fib (S (S n''))).
     { replace (S (S (S (S n'')))) with (S (S (S (S n'')))) by reflexivity.
       rewrite fib_SS. reflexivity. }
     rewrite Heq.
+    (* Now goal is: fib(n) < fib(n) + fib(n-1)
+       This follows from fib(n-1) > 0 *)
     apply Nat.lt_add_pos_r. assumption.
 Qed.
 
-(* Helper lemma: elements in seq start len are >= start *)
+(*
+  Helper lemma: All elements in (seq start len) are >= start
+
+  Proof strategy: Induction on len. The sequence [start, start+1, ..., start+len-1]
+  has all elements >= start.
+  - Base case: empty list has no elements
+  - Inductive case: first element is start (so >= start), and remaining elements
+    are in seq (start+1) (len-1), so by IH they're >= start+1, hence >= start
+*)
 Lemma seq_ge : forall x start len,
   In x (seq start len) -> x >= start.
 Proof.
   intros x start len.
   generalize dependent start.
+  (* Induction on the length of the sequence *)
   induction len; intros start Hin.
-  - simpl in Hin. inversion Hin.
-  - simpl in Hin. destruct Hin as [Heq | Hin'].
-    + rewrite Heq. auto.
-    + apply IHlen in Hin'. auto with arith.
+  - (* Base case: len = 0, so seq is empty, contradiction with In x *)
+    simpl in Hin. inversion Hin.
+  - (* Inductive case: seq start (S len) = start :: seq (S start) len *)
+    simpl in Hin. destruct Hin as [Heq | Hin'].
+    + (* x = start, so x >= start trivially *)
+      rewrite Heq. auto.
+    + (* x is in the tail seq (S start) len, so by IH, x >= S start >= start *)
+      apply IHlen in Hin'. auto with arith.
 Qed.
 
-(* Elements in fibs_upto are Fibonacci numbers *)
+(*
+  Lemma: Every element in fibs_upto n is a Fibonacci number
+
+  Proof strategy: fibs_upto n is constructed by filtering map fib (seq 1 (S n)),
+  so every element has the form fib(k) for some k >= 1.
+  We proceed by induction on the sequence structure, using the fact that
+  seq 1 (S n) contains only indices >= 1.
+*)
 Lemma in_fibs_upto_fib : forall x n,
   In x (fibs_upto n) -> exists k, k >= 1 /\ fib k = x.
 Proof.
   intros x n Hin.
+  (* Unfold the definition of fibs_upto: takeWhile (λx. x ≤ n) (map fib (seq 1 (S n))) *)
   unfold fibs_upto in Hin.
+  (* Remember the sequence of indices [1, 2, ..., n+1] *)
   remember (seq 1 (S n)) as l.
+  (* Establish that all indices in the sequence are >= 1 *)
   assert (Hge: forall y, In y l -> y >= 1).
   { intros y Hiny. rewrite Heql in Hiny.
     apply seq_ge in Hiny. assumption. }
   clear Heql.
+  (* Induction on the list structure *)
   induction l as [|a l' IH].
-  - simpl in Hin. inversion Hin.
-  - simpl in Hin.
+  - (* Base case: empty list, contradiction *)
+    simpl in Hin. inversion Hin.
+  - (* Inductive case: list is a :: l' *)
+    simpl in Hin.
+    (* Check whether fib(a) <= n (whether a is included in fibs_upto) *)
     destruct (Nat.leb (fib a) n) eqn:Hleb.
-    + simpl in Hin. destruct Hin as [Heq | Hin'].
-      * exists a. split.
-        -- apply Hge. left. reflexivity.
-        -- rewrite <- Heq. reflexivity.
-      * assert (Hge': forall y, In y l' -> y >= 1).
+    + (* fib(a) <= n, so fib(a) is included in the result *)
+      simpl in Hin. destruct Hin as [Heq | Hin'].
+      * (* x = fib(a), so we found our witness k = a *)
+        exists a. split.
+        -- (* a >= 1 follows from our assertion about the sequence *)
+           apply Hge. left. reflexivity.
+        -- (* fib(a) = x by equality *)
+           rewrite <- Heq. reflexivity.
+      * (* x is in the tail, use induction hypothesis *)
+        assert (Hge': forall y, In y l' -> y >= 1).
         { intros y Hiny. apply Hge. right. assumption. }
         apply IH; assumption.
-    + inversion Hin.
+    + (* fib(a) > n, so takeWhile stops here and x can't be in the result *)
+      inversion Hin.
 Qed.
 
-(* Elements in fibs_upto are positive *)
+(*
+  Corollary: All elements in fibs_upto are positive
+
+  Proof: By in_fibs_upto_fib, each element is fib(k) for k >= 1.
+  By fib_pos, fib(k) > 0 for k >= 1.
+*)
 Lemma in_fibs_upto_pos : forall x n,
   In x (fibs_upto n) -> x > 0.
 Proof.
   intros x n Hin.
+  (* Use the previous lemma to get the witness k *)
   destruct (in_fibs_upto_fib x n Hin) as [k [Hk Heq]].
+  (* Rewrite x as fib(k) *)
   rewrite <- Heq.
+  (* Apply fib_pos to show fib(k) > 0 *)
   apply fib_pos. assumption.
 Qed.
 
-(* Elements in fibs_upto n are <= n *)
+(*
+  Lemma: All elements in fibs_upto n are <= n
+
+  Proof strategy: fibs_upto n uses takeWhile to only include Fibonacci numbers
+  that satisfy fib(k) <= n. We prove this by induction on the sequence structure,
+  observing that takeWhile only includes elements satisfying the predicate.
+*)
 Lemma in_fibs_upto_le : forall x n,
   In x (fibs_upto n) -> x <= n.
 Proof.
   intros x n Hin.
+  (* Unfold fibs_upto definition *)
   unfold fibs_upto in Hin.
+  (* Induction on the sequence [1, 2, ..., n+1] *)
   induction (seq 1 (S n)) as [|a l IH].
-  - simpl in Hin. inversion Hin.
-  - simpl in Hin.
+  - (* Base case: empty list, contradiction *)
+    simpl in Hin. inversion Hin.
+  - (* Inductive case: process takeWhile on (fib a) :: map fib l *)
+    simpl in Hin.
+    (* Case split on whether fib(a) <= n *)
     destruct (Nat.leb (fib a) n) eqn:Hleb.
-    + simpl in Hin. destruct Hin as [Heq | Hin'].
-      * subst x. apply Nat.leb_le. assumption.
-      * apply IH. assumption.
-    + inversion Hin.
+    + (* fib(a) <= n, so fib(a) is included *)
+      simpl in Hin. destruct Hin as [Heq | Hin'].
+      * (* x = fib(a), and we know fib(a) <= n from Hleb *)
+        subst x. apply Nat.leb_le. assumption.
+      * (* x is in the tail, use IH *)
+        apply IH. assumption.
+    + (* fib(a) > n, so takeWhile stops and list is empty, contradiction *)
+      inversion Hin.
 Qed.
 
 Lemma fib_decrease : forall x n, In x (fibs_upto n) -> x > 0 -> x < n -> n - x < n.
@@ -187,106 +278,181 @@ Fixpoint sum_list (l : list nat) : nat :=
 Lemma zeckendorf_0 : forall acc, zeckendorf 0 acc = acc.
 Proof. intro. simpl. reflexivity. Qed.
 
-(* Helper lemmas for zeckendorf_fuel *)
+(*
+  Main lemma: All elements produced by zeckendorf_fuel are Fibonacci numbers
+
+  Statement: If all elements in acc are Fibonacci numbers, then all elements
+  in the result of zeckendorf_fuel are Fibonacci numbers.
+
+  Proof strategy: Induction on fuel.
+  - When fuel = 0 or n = 0, the function returns acc unchanged, so the property holds
+  - When fuel > 0 and n > 0:
+    * The algorithm picks the largest Fibonacci number x <= n from fibs_upto n
+    * If x <= n, it recursively calls with (n-x) and (x::acc)
+    * We need to show x::acc preserves the invariant (all elements are Fibonacci)
+    * Since x comes from fibs_upto n, it's a Fibonacci number by in_fibs_upto_fib
+    * The else branch (x > n) is impossible since x is from fibs_upto n, so x <= n
+*)
 Lemma zeckendorf_fuel_acc_fib : forall fuel n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
   forall z, In z (zeckendorf_fuel fuel n acc) -> exists k, z = fib k.
 Proof.
+  (* Induction on the fuel parameter *)
   induction fuel as [|fuel' IHfuel].
-  - (* fuel = 0 *)
-    intros n acc Hacc_fib z Hz. simpl in Hz. apply Hacc_fib. exact Hz.
-  - (* fuel = S fuel' *)
+  - (* Base case: fuel = 0, function returns acc immediately *)
     intros n acc Hacc_fib z Hz.
+    simpl in Hz. apply Hacc_fib. exact Hz.
+  - (* Inductive case: fuel = S fuel' *)
+    intros n acc Hacc_fib z Hz.
+    (* Case split on n *)
     destruct n as [|n'].
-    + (* n = 0 *) simpl in Hz. apply Hacc_fib. exact Hz.
-    + (* n = S n' *)
+    + (* When n = 0, function returns acc *)
+      simpl in Hz. apply Hacc_fib. exact Hz.
+    + (* When n = S n' > 0, algorithm processes the decomposition *)
       unfold zeckendorf_fuel in Hz. fold zeckendorf_fuel in Hz.
+      (* Get the largest Fibonacci number <= n *)
       destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
-      * (* fibs = [] *)
+      * (* Case: fibs_upto is empty (cannot happen, but returns acc anyway) *)
         apply Hacc_fib. exact Hz.
-      * (* fibs = x :: xs *)
+      * (* Case: x is the largest Fibonacci number in fibs_upto n *)
+        (* Check if x <= n *)
         destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* x <= S n' *)
+        -- (* Subcase: x <= S n', so we recurse with (n-x) and (x::acc) *)
+           (* Apply IH to the recursive call *)
            apply IHfuel in Hz.
            ++ exact Hz.
-           ++ (* Prove: forall z, In z (x :: acc) -> exists k, z = fib k *)
+           ++ (* Need to prove: all elements in (x :: acc) are Fibonacci numbers *)
               intros w Hin_w. simpl in Hin_w.
               destruct Hin_w as [Heq | Hin_acc].
-              ** (* w = x *)
+              ** (* If w = x: x is a Fibonacci number from fibs_upto *)
                  subst w.
-                 (* x is in fibs_upto (S n') *)
+                 (* Show that x is in fibs_upto (S n') *)
                  assert (Hin_x: In x (fibs_upto (S n'))).
-                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 { (* x is the head of rev (fibs_upto n), so it's in fibs_upto n *)
+                   apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 (* By in_fibs_upto_fib, x = fib(k) for some k *)
                  destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
                  exists k. symmetry. exact Heq_fib.
-              ** (* w in acc *)
+              ** (* If w is in acc: use the assumption about acc *)
                  apply Hacc_fib. exact Hin_acc.
-        -- (* x > S n' (impossible case) *)
-           (* x is in fibs_upto (S n'), so x <= S n', but Hleb says x > S n' *)
+        -- (* Subcase: x > S n' - this is impossible! *)
+           (* Derive a contradiction: x is in fibs_upto n, so x <= n by in_fibs_upto_le,
+              but Hleb says x > n *)
            exfalso.
+           (* First, show x is in fibs_upto (S n') *)
            assert (Hin_x: In x (fibs_upto (S n'))).
            { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+           (* Therefore x <= S n' by in_fibs_upto_le *)
            assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
-           apply Nat.leb_gt in Hleb. lia.
+           (* But Hleb = false means x > S n' *)
+           apply Nat.leb_gt in Hleb.
+           (* Contradiction: x <= S n' and x > S n' *)
+           lia.
 Qed.
 
-(* Main strengthened lemmas *)
+(*
+  Wrapper lemma: Specialization of zeckendorf_fuel_acc_fib to zeckendorf
+
+  This instantiates fuel = n, which is the definition of zeckendorf.
+  Since fuel >= n is satisfied (n >= n), we can apply the fuel-based lemma.
+*)
 Lemma zeckendorf_acc_fib : forall n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
   forall z, In z (zeckendorf n acc) -> exists k, z = fib k.
 Proof.
   intros n acc Hacc_fib z Hz.
+  (* Unfold the definition: zeckendorf n acc = zeckendorf_fuel n n acc *)
   unfold zeckendorf in Hz.
+  (* Apply the fuel-based lemma with fuel = n >= n *)
   apply (zeckendorf_fuel_acc_fib n n acc Hacc_fib z Hz).
 Qed.
 
+(*
+  Main lemma: The sum of elements produced by zeckendorf_fuel equals sum of acc plus n
+
+  Statement: If fuel >= n, then sum_list(zeckendorf_fuel fuel n acc) = sum_list(acc) + n
+
+  Intuition: The algorithm decomposes n into Fibonacci numbers. At each step, it picks
+  the largest Fibonacci x <= n and recursively decomposes (n-x). The sum of all picked
+  Fibonacci numbers plus the sum of acc equals sum(acc) + n.
+
+  Proof strategy: Induction on fuel.
+  - Base case (fuel = 0): fuel >= n implies n = 0, so the sum is unchanged
+  - Inductive case (fuel > 0, n > 0):
+    * Pick largest Fibonacci x <= n
+    * Recursively process (n-x) with accumulator (x::acc)
+    * By IH: sum(result) = sum(x::acc) + (n-x) = x + sum(acc) + (n-x) = sum(acc) + n
+    * The arithmetic is handled by rewriting using associativity and commutativity
+*)
 Lemma zeckendorf_fuel_acc_sum : forall fuel n acc,
   fuel >= n ->
   sum_list (zeckendorf_fuel fuel n acc) = sum_list acc + n.
 Proof.
+  (* Induction on fuel *)
   induction fuel as [|fuel' IHfuel].
-  - (* fuel = 0 *)
+  - (* Base case: fuel = 0 *)
     intros n acc Hge.
+    (* Since fuel = 0 and fuel >= n, we must have n = 0 *)
     assert (Heq: n = 0) by lia. subst n.
+    (* zeckendorf_fuel 0 0 acc = acc, and sum_list acc + 0 = sum_list acc *)
     simpl. lia.
-  - (* fuel = S fuel' *)
+  - (* Inductive case: fuel = S fuel' *)
     intros n acc Hge.
+    (* Case split on n *)
     destruct n as [|n'].
-    + (* n = 0 *) simpl. lia.
-    + (* n = S n' *)
+    + (* n = 0: function returns acc, and sum_list acc + 0 = sum_list acc *)
+      simpl. lia.
+    + (* n = S n' > 0: perform Zeckendorf decomposition *)
       unfold zeckendorf_fuel. fold zeckendorf_fuel.
+      (* Get the largest Fibonacci number <= n *)
       destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
-      * (* fibs = [] *)
-        (* This case is impossible: fibs_upto (S n') always contains fib(1)=1 *)
+      * (* Case: fibs_upto is empty - impossible! *)
+        (* For any n >= 1, fibs_upto n contains at least fib(1) = 1 *)
         exfalso.
         assert (H1: In 1 (fibs_upto (S n'))).
-        { unfold fibs_upto. simpl.
+        { (* fib(1) = 1 <= S n' for all n', so 1 is in fibs_upto (S n') *)
+          unfold fibs_upto. simpl.
           destruct n'; simpl; auto.
         }
+        (* If 1 is in fibs_upto, then it's also in rev(fibs_upto) *)
         assert (H2: In 1 (rev (fibs_upto (S n')))) by (rewrite <- in_rev; exact H1).
+        (* But we assumed rev(fibs_upto) = [], contradiction *)
         rewrite Heqfibs in H2. inversion H2.
-      * (* fibs = x :: xs *)
+      * (* Case: x is the largest Fibonacci <= n *)
+        (* Check if x <= n (should always be true) *)
         destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* x <= S n' *)
+        -- (* Subcase: x <= S n', proceed with decomposition *)
+           (* Extract the inequality from the boolean *)
            assert (Hle: x <= S n') by (apply Nat.leb_le; assumption).
+           (* Show that x is in fibs_upto (S n') *)
            assert (Hin_x: In x (fibs_upto (S n'))).
            { assert (Hin_rev: In x (rev (fibs_upto (S n')))).
              { rewrite Heqfibs. left. reflexivity. }
              apply in_rev in Hin_rev. exact Hin_rev.
            }
+           (* Therefore x > 0 (all Fibonacci numbers in fibs_upto are positive) *)
            assert (Hpos: x > 0) by (apply (in_fibs_upto_pos x (S n') Hin_x)).
+           (* Show that fuel' >= S n' - x (needed for IH) *)
            assert (Hfuel_ge: fuel' >= S n' - x).
-           { destruct (Nat.eq_dec x (S n')) as [Heq_x | Hneq_x].
-             - (* x = S n' *) subst x. rewrite Nat.sub_diag. lia.
-             - (* x < S n' *) assert (Hsub: S n' - x < S n') by (apply Nat.sub_lt; lia). lia.
+           { (* Case split: x = S n' or x < S n' *)
+             destruct (Nat.eq_dec x (S n')) as [Heq_x | Hneq_x].
+             - (* If x = S n', then S n' - x = 0 <= fuel' *)
+               subst x. rewrite Nat.sub_diag. lia.
+             - (* If x < S n', then S n' - x < S n' <= S fuel' - 1 = fuel' *)
+               assert (Hsub: S n' - x < S n') by (apply Nat.sub_lt; lia). lia.
            }
+           (* Apply induction hypothesis to the recursive call *)
            assert (Heq_sum: sum_list (zeckendorf_fuel fuel' (S n' - x) (x :: acc)) =
                            sum_list (x :: acc) + (S n' - x)).
            { apply IHfuel. exact Hfuel_ge. }
+           (* Rewrite using IH *)
            rewrite Heq_sum.
-           (* Goal: sum_list (x :: acc) + (S n' - x) = sum_list acc + S n' *)
+           (* Now we need to show: sum_list(x::acc) + (S n' - x) = sum_list(acc) + S n'
+              This is an arithmetic identity: (x + sum_list acc) + (S n' - x) = sum_list acc + S n'
+              We prove it by arithmetic rewriting *)
            unfold sum_list at 1. fold sum_list.
            (* Goal: (x + sum_list acc) + (S n' - x) = sum_list acc + S n' *)
+           (* Rewrite to isolate: x + (S n' - x) = S n' *)
            rewrite <- Nat.add_assoc.
            (* Goal: x + (sum_list acc + (S n' - x)) = sum_list acc + S n' *)
            rewrite (Nat.add_comm (sum_list acc) (S n' - x)).
@@ -295,29 +461,47 @@ Proof.
            (* Goal: (x + (S n' - x)) + sum_list acc = sum_list acc + S n' *)
            rewrite (Nat.add_comm x (S n' - x)).
            (* Goal: ((S n' - x) + x) + sum_list acc = sum_list acc + S n' *)
+           (* Use the fact that (S n' - x) + x = S n' when x <= S n' *)
            rewrite Nat.sub_add by exact Hle.
            (* Goal: S n' + sum_list acc = sum_list acc + S n' *)
            apply Nat.add_comm.
-        -- (* x > S n' (impossible case) *)
-           (* x is in fibs_upto (S n'), so x <= S n', but Hleb says x > S n' *)
+        -- (* Subcase: x > S n' - impossible! *)
+           (* Same contradiction as in zeckendorf_fuel_acc_fib *)
            exfalso.
            assert (Hin_x: In x (fibs_upto (S n'))).
            { assert (Hin_rev: In x (rev (fibs_upto (S n')))).
              { rewrite Heqfibs. left. reflexivity. }
              apply in_rev in Hin_rev. exact Hin_rev.
            }
+           (* x in fibs_upto (S n') implies x <= S n' *)
            assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
-           apply Nat.leb_gt in Hleb. lia.
+           (* But Hleb = false means x > S n' *)
+           apply Nat.leb_gt in Hleb.
+           (* Contradiction *)
+           lia.
 Qed.
 
+(*
+  Wrapper lemma: Specialization of zeckendorf_fuel_acc_sum to zeckendorf
+
+  This instantiates fuel = n and uses the fact that n >= n to apply the fuel-based lemma.
+*)
 Lemma zeckendorf_acc_sum : forall n acc,
   sum_list (zeckendorf n acc) = sum_list acc + n.
 Proof.
   intros n acc.
+  (* Unfold the definition: zeckendorf n acc = zeckendorf_fuel n n acc *)
   unfold zeckendorf.
+  (* Apply the fuel-based lemma with fuel = n >= n *)
   apply zeckendorf_fuel_acc_sum. lia.
 Qed.
 
+(*
+  Combined correctness lemma: Both properties together
+
+  This combines the previous two lemmas to show that zeckendorf produces
+  a list of Fibonacci numbers whose sum equals the input.
+*)
 Lemma zeckendorf_acc_correct : forall n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
   let zs := zeckendorf n acc in
@@ -325,30 +509,76 @@ Lemma zeckendorf_acc_correct : forall n acc,
   sum_list zs = sum_list acc + n.
 Proof.
   intros. split.
-  - apply zeckendorf_acc_fib. assumption.
-  - apply zeckendorf_acc_sum.
+  - (* Part 1: All elements are Fibonacci numbers *)
+    apply zeckendorf_acc_fib. assumption.
+  - (* Part 2: Sum equals sum(acc) + n *)
+    apply zeckendorf_acc_sum.
 Qed.
 
-(* The main zeckendorf correctness theorem *)
+(*
+  ==============================================================================
+  MAIN ZECKENDORF CORRECTNESS THEOREMS
+  ==============================================================================
+
+  These theorems establish the correctness of the Zeckendorf representation
+  algorithm by proving two key properties:
+  1. All elements in the decomposition are Fibonacci numbers
+  2. The sum of the decomposition equals the original input
+
+  Together, these prove that zeckendorf computes a valid Zeckendorf
+  representation (a sum of non-consecutive Fibonacci numbers equaling n).
+*)
+
+(*
+  Theorem 1: Fibonacci property
+
+  Every element in the Zeckendorf decomposition is a Fibonacci number.
+
+  Proof: Apply zeckendorf_acc_fib with acc = [], using the fact that
+  the empty list trivially satisfies "all elements are Fibonacci numbers".
+*)
 Theorem zeckendorf_fib_property : forall n,
   let zs := zeckendorf n [] in
   forall z, In z zs -> exists k, z = fib k.
 Proof.
   intros n zs z Hz.
   unfold zs in Hz.
+  (* Apply zeckendorf_acc_fib with acc = [] *)
+  (* The precondition "all z in [] are Fibonacci" is vacuously true *)
   apply (zeckendorf_acc_fib n [] (fun z H => match H with end) z Hz).
 Qed.
 
+(*
+  Theorem 2: Sum property
+
+  The sum of elements in the Zeckendorf decomposition equals n.
+
+  Proof: Apply zeckendorf_acc_sum with acc = [], which gives
+  sum(result) = sum([]) + n = 0 + n = n.
+*)
 Theorem zeckendorf_sum_property : forall n,
   sum_list (zeckendorf n []) = n.
 Proof.
   intro n.
+  (* Apply zeckendorf_acc_sum to get sum(zeckendorf n []) = sum([]) + n *)
   assert (H: sum_list (zeckendorf n []) = sum_list [] + n).
   { apply zeckendorf_acc_sum. }
+  (* Simplify: sum([]) = 0, so result is n *)
   simpl in H. exact H.
 Qed.
 
-(* Full correctness theorem *)
+(*
+  Main Theorem: Full Zeckendorf correctness
+
+  The Zeckendorf decomposition of n produces a list of Fibonacci numbers
+  whose sum equals n.
+
+  This is the culmination of all our work: we've formally verified that
+  the greedy algorithm correctly computes Zeckendorf representations.
+
+  Note: This theorem doesn't yet prove uniqueness or the non-consecutive
+  property, but it establishes the fundamental correctness of the decomposition.
+*)
 Theorem zeckendorf_correct : forall n,
   let zs := zeckendorf n [] in
   (forall z, In z zs -> exists k, z = fib k) /\
@@ -356,6 +586,8 @@ Theorem zeckendorf_correct : forall n,
 Proof.
   intro n.
   split.
-  - apply zeckendorf_fib_property.
-  - apply zeckendorf_sum_property.
+  - (* Part 1: All elements are Fibonacci numbers *)
+    apply zeckendorf_fib_property.
+  - (* Part 2: Sum equals n *)
+    apply zeckendorf_sum_property.
 Qed.
