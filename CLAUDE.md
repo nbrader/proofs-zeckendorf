@@ -120,3 +120,4 @@ When modifying proofs:
 - Working directory for Coq files is `Coq/`
 - Build artifacts (`.vo`, `.vos`, `.vok`, `.glob` files) are generated in the `Coq/` directory
 - The project is under MIT License (see LICENSE file)
+- Rough Working\wiki proof.txt shows an example of a plain english proof in full that this proof Coq proof can borrow from.
