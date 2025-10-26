@@ -188,8 +188,12 @@ Proof.
   - (* n = 0 *)
     rewrite zeckendorf_0 in Hz. apply Hacc_fib. assumption.
   - (* n = S n' *)
-    (* The proof requires reasoning about Program Fixpoint, which is complex *)
-    (* We'll admit this for now as it requires detailed unfolding *)
+    (* Program Fixpoint generates zeckendorf_func with dependent types (existT).
+       Unfolding exposes complex internal representation that doesn't match
+       our expected pattern. This proof would require:
+       - Functional induction scheme for Program Fixpoint
+       - Or rewriting using Function with explicit well-founded recursion
+       - Or extracting Program-generated equations *)
 Admitted.
 
 Lemma zeckendorf_acc_sum : forall n acc,
@@ -201,8 +205,8 @@ Proof.
   - (* n = 0 *)
     rewrite zeckendorf_0. rewrite Nat.add_0_r. reflexivity.
   - (* n = S n' *)
-    (* The proof requires reasoning about Program Fixpoint, which is complex *)
-    (* We'll admit this for now as it requires detailed unfolding *)
+    (* Same issue as zeckendorf_acc_fib: Program Fixpoint's internal
+       representation prevents straightforward unfolding and pattern matching. *)
 Admitted.
 
 Lemma zeckendorf_acc_correct : forall n acc,
