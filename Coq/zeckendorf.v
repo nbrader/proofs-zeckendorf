@@ -591,3 +591,114 @@ Proof.
   - (* Part 2: Sum equals n *)
     apply zeckendorf_sum_property.
 Qed.
+
+(*
+  ==============================================================================
+  ADDITIONAL PROPERTIES (ADMITTED - TO BE PROVEN)
+  ==============================================================================
+
+  The following theorems state important additional properties of Zeckendorf
+  representations that we have not yet proven:
+  1. Non-consecutive property: No two consecutive Fibonacci numbers appear
+  2. Uniqueness: The representation is unique for each natural number
+*)
+
+(*
+  Helper predicate: Two Fibonacci numbers are consecutive
+
+  fib_consecutive k1 k2 means that k1 and k2 are consecutive indices,
+  i.e., k2 = k1 + 1 or k1 = k2 + 1.
+*)
+Definition fib_consecutive (k1 k2 : nat) : Prop :=
+  k2 = S k1 \/ k1 = S k2.
+
+(*
+  Helper predicate: A list contains no consecutive Fibonacci numbers
+
+  This predicate ensures that for any two elements x, y in the list,
+  if x = fib(i) and y = fib(j), then i and j are not consecutive.
+*)
+Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
+  match l with
+  | [] => True
+  | x :: xs =>
+    (forall y, In y xs ->
+      forall i j, fib i = x -> fib j = y -> ~fib_consecutive i j) /\
+    no_consecutive_fibs xs
+  end.
+
+(*
+  Theorem: Non-consecutive property (ADMITTED)
+
+  The Zeckendorf representation produced by our algorithm contains no
+  two consecutive Fibonacci numbers.
+
+  This is a key property of Zeckendorf representations. The greedy algorithm
+  naturally produces non-consecutive Fibonacci numbers because when we pick
+  the largest fib(k) <= n, the remainder n - fib(k) is strictly less than
+  fib(k-1), which can be proven using the identity:
+  fib(k) + fib(k-1) = fib(k+1) and the fact that we chose the largest fib(k) <= n.
+
+  Proof strategy (not yet implemented):
+  - Show that at each step, if we pick fib(k), then n - fib(k) < fib(k-1)
+  - This ensures the next Fibonacci number we pick has index < k-1
+  - Therefore no two consecutive Fibonacci numbers can appear in the sequence
+*)
+Theorem zeckendorf_no_consecutive : forall n,
+  no_consecutive_fibs (zeckendorf n []).
+Proof.
+Admitted.
+
+(*
+  Helper predicate: A list is a valid Zeckendorf representation of n
+
+  A list l is a valid Zeckendorf representation of n if:
+  1. All elements are Fibonacci numbers
+  2. The sum equals n
+  3. No two consecutive Fibonacci numbers appear in the list
+*)
+Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
+  (forall z, In z l -> exists k, z = fib k) /\
+  sum_list l = n /\
+  no_consecutive_fibs l.
+
+(*
+  Theorem: Uniqueness of Zeckendorf representation (ADMITTED)
+
+  Every positive integer has a unique representation as a sum of
+  non-consecutive Fibonacci numbers.
+
+  This is Zeckendorf's theorem proper. It states that if two lists both
+  satisfy the Zeckendorf representation properties for the same number n,
+  then they must be equal (up to reordering).
+
+  Proof strategy (not yet implemented):
+  - Use strong induction on n
+  - For the inductive step, suppose n has two different representations
+  - Both must contain the largest Fibonacci number fib(k) <= n
+    (otherwise, we could add it and get a different sum by the greedy property)
+  - After removing fib(k) from both representations, the remainders must
+    represent n - fib(k)
+  - By induction hypothesis, these remainders are equal
+  - Therefore the original representations are equal
+
+  Note: This theorem as stated requires that both lists are sorted in the
+  same order, or we need to define equality up to permutation.
+*)
+Theorem zeckendorf_unique : forall n l1 l2,
+  is_zeckendorf_repr n l1 ->
+  is_zeckendorf_repr n l2 ->
+  l1 = l2.
+Proof.
+Admitted.
+
+(*
+  Corollary: Our algorithm produces THE unique Zeckendorf representation
+
+  Combining our correctness theorem with the uniqueness theorem would show
+  that our algorithm computes the unique Zeckendorf representation.
+*)
+Theorem zeckendorf_is_the_unique_repr : forall n,
+  is_zeckendorf_repr n (zeckendorf n []).
+Proof.
+Admitted.
