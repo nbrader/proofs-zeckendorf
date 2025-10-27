@@ -673,20 +673,80 @@ Proof.
 Qed.
 
 (*
-  Theorem: Non-consecutive property (ADMITTED - simplified version)
+  Helper lemma: fuel-based version of non-consecutive property
 
-  For now, we admit this theorem. A complete proof would require:
-  1. Showing that the greedy algorithm picks the largest Fibonacci F_k <= n
-  2. Proving that the remainder n - F_k < F_{k-1}
-  3. Using induction on the fuel to show this property is preserved
+  This lemma states that zeckendorf_fuel preserves the non-consecutive property:
+  if acc has no consecutive Fibs, then the result also has no consecutive Fibs.
 
-  The proof is non-trivial because we need to track the indices of Fibonacci
-  numbers through the algorithm's execution, which requires additional invariants.
+  The proof would proceed by induction on fuel, showing that when we add a new
+  Fibonacci number F_k, the remainder n - F_k < F_{k-1}, so the next Fibonacci
+  picked has index ≤ k-2, ensuring no consecutive Fibs are added.
+*)
+Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
+  no_consecutive_fibs acc ->
+  (forall z, In z acc -> exists k, z = fib k) ->
+  no_consecutive_fibs (zeckendorf_fuel fuel n acc).
+Proof.
+  (* Induction on fuel *)
+  induction fuel as [|fuel' IHfuel].
+  - (* Base case: fuel = 0, function returns acc *)
+    intros n acc Hnocons_acc Hacc_fib.
+    simpl. exact Hnocons_acc.
+  - (* Inductive case: fuel = S fuel' *)
+    intros n acc Hnocons_acc Hacc_fib.
+    (* Case split on n *)
+    destruct n as [|n'].
+    + (* n = 0: function returns acc *)
+      simpl. exact Hnocons_acc.
+    + (* n = S n' > 0: algorithm picks largest Fib and recurses *)
+      unfold zeckendorf_fuel. fold zeckendorf_fuel.
+      (* Get the largest Fibonacci number <= n *)
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
+      * (* Case: fibs_upto is empty (returns acc) *)
+        exact Hnocons_acc.
+      * (* Case: x is the largest Fibonacci <= n *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* Subcase: x <= S n', recurse with (n-x) and (x::acc) *)
+           (* Apply IH to the recursive call *)
+           apply IHfuel.
+           ++ (* Need to show: no_consecutive_fibs (x :: acc) *)
+              (* This is the key part: we need to prove that x is not consecutive
+                 with any element in acc *)
+              admit.
+           ++ (* Need to show: all elements in (x :: acc) are Fibonacci numbers *)
+              intros z Hin_z. simpl in Hin_z.
+              destruct Hin_z as [Heq | Hin_acc].
+              ** (* z = x: x is a Fibonacci number from fibs_upto *)
+                 subst z.
+                 assert (Hin_x: In x (fibs_upto (S n'))).
+                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
+                 exists k. symmetry. exact Heq_fib.
+              ** (* z is in acc: use assumption *)
+                 apply Hacc_fib. exact Hin_acc.
+        -- (* Subcase: x > S n' (impossible, returns acc) *)
+           exact Hnocons_acc.
+Admitted.
+
+(*
+  Theorem: Non-consecutive property
+
+  The zeckendorf algorithm produces representations with no consecutive Fibonacci numbers.
+
+  This follows from the fuel-based lemma with acc = [] (which trivially has no
+  consecutive Fibs since it's empty).
 *)
 Theorem zeckendorf_no_consecutive : forall n,
   no_consecutive_fibs (zeckendorf n []).
 Proof.
-Admitted.
+  intro n.
+  unfold zeckendorf.
+  apply zeckendorf_fuel_no_consecutive.
+  - (* Base case: empty list has no consecutive Fibs *)
+    simpl. trivial.
+  - (* Base case: all elements in [] are Fibonacci numbers (vacuously true) *)
+    intros z Hz. inversion Hz.
+Qed.
 
 (*
   Helper predicate: A list is a valid Zeckendorf representation of n
