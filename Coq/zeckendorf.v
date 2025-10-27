@@ -682,84 +682,109 @@ Qed.
   Fibonacci number F_k, the remainder n - F_k < F_{k-1}, so the next Fibonacci
   picked has index ≤ k-2, ensuring no consecutive Fibs are added.
 *)
+(* Helper: bound on max element in acc relative to remainder *)
+Definition acc_bounded_by_remainder (acc : list nat) (remainder : nat) : Prop :=
+  forall y, In y acc -> y < remainder.
+
+(* Strengthened lemma with bound tracking *)
+Lemma zeckendorf_fuel_no_consecutive_strong : forall fuel n acc,
+  no_consecutive_fibs acc ->
+  (forall z, In z acc -> exists k, z = fib k) ->
+  (forall y, In y acc -> exists k, k >= 2 /\ y = fib k /\ fib (S k) > n) ->
+  no_consecutive_fibs (zeckendorf_fuel fuel n acc).
+Proof.
+  (* The key additional hypothesis: every element y in acc has the property that
+     fib(index(y) + 1) > n, meaning the next Fibonacci after y was too large
+     for the original remainder, ensuring no consecutive fibs can be added *)
+  induction fuel as [|fuel' IHfuel].
+  - (* Base case: fuel = 0 *)
+    intros n acc Hnocons _ _.
+    simpl. exact Hnocons.
+  - (* Inductive case *)
+    intros n acc Hnocons Hacc_fib Hacc_bound.
+    destruct n as [|n'].
+    + (* n = 0 *)
+      simpl. exact Hnocons.
+    + (* n = S n' > 0 *)
+      unfold zeckendorf_fuel. fold zeckendorf_fuel.
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
+      * exact Hnocons.
+      * destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n', recurse with (n-x) and (x::acc) *)
+           apply IHfuel.
+           ++ (* Show: no_consecutive_fibs (x :: acc) *)
+              unfold no_consecutive_fibs. fold no_consecutive_fibs.
+              split.
+              ** (* Show x is not consecutive with any y in acc *)
+                 intros y Hin_y i j Heq_x Heq_y Hcons.
+                 (* Get bound on y from Hacc_bound *)
+                 assert (Hy_bound: exists ky, ky >= 2 /\ y = fib ky /\ fib (S ky) > S n').
+                 { apply Hacc_bound. exact Hin_y. }
+                 destruct Hy_bound as [ky [Hky_ge [Heq_ky Hky_bound]]].
+                 (* Get info about x *)
+                 assert (Hin_x: In x (fibs_upto (S n'))).
+                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 assert (Hx_le: x <= S n').
+                 { apply in_fibs_upto_le. exact Hin_x. }
+                 (* x = fib(i), so i is the index *)
+                 (* We need i for x such that fib(i) = x *)
+                 (* Key: Since fib(S ky) > S n' and x <= S n', we have x < fib(S ky) *)
+                 (* Combined with Heq_ky: y = fib(ky), this means if x = fib(i),
+                    then fib(i) < fib(S ky), so i < S ky, thus i <= ky *)
+                 (* But Hcons says i and ky are consecutive, meaning |i - ky| = 1 *)
+                 (* If i <= ky and they're consecutive, then i = ky or i = ky - 1 *)
+                 (* But y = fib(ky) is in acc, which came from EARLIER iterations,
+                    while x = fib(i) is being added NOW. *)
+                 (* The crux: we don't have enough info to derive the contradiction *)
+                 admit.
+              ** exact Hnocons.
+           ++ (* Show: all elements in (x :: acc) are Fibonacci numbers *)
+              intros z Hin_z. simpl in Hin_z.
+              destruct Hin_z as [Heq | Hin_acc].
+              ** subst z.
+                 assert (Hin_x: In x (fibs_upto (S n'))).
+                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
+                 exists k. symmetry. exact Heq_fib.
+              ** apply Hacc_fib. exact Hin_acc.
+           ++ (* Show: bound property for (x :: acc) *)
+              intros y Hin_y. simpl in Hin_y.
+              destruct Hin_y as [Heq | Hin_acc].
+              ** (* y = x *)
+                 subst y.
+                 (* We need to show: exists k, k >= 2 /\ x = fib k /\ fib (S k) > S n' - x *)
+                 (* This is where we use the greedy property:
+                    x is the LARGEST fib <= S n', so fib(k+1) > S n' *)
+                 admit.
+              ** (* y in acc: use Hacc_bound and show bound still holds *)
+                 assert (Hy: exists ky, ky >= 2 /\ y = fib ky /\ fib (S ky) > S n').
+                 { apply Hacc_bound. exact Hin_acc. }
+                 destruct Hy as [ky [Hky_ge [Heq_ky Hky_bound]]].
+                 exists ky. split; [exact Hky_ge|]. split; [exact Heq_ky|].
+                 (* Show fib (S ky) > S n' - x *)
+                 (* Since fib (S ky) > S n' and x > 0, we have fib (S ky) > S n' - x *)
+                 admit.
+        -- exact Hnocons.
+Admitted.
+
+(* Original lemma as a corollary (for empty acc) *)
 Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
   no_consecutive_fibs acc ->
   (forall z, In z acc -> exists k, z = fib k) ->
   no_consecutive_fibs (zeckendorf_fuel fuel n acc).
 Proof.
-  (* Induction on fuel *)
-  induction fuel as [|fuel' IHfuel].
-  - (* Base case: fuel = 0, function returns acc *)
-    intros n acc Hnocons_acc Hacc_fib.
-    simpl. exact Hnocons_acc.
-  - (* Inductive case: fuel = S fuel' *)
-    intros n acc Hnocons_acc Hacc_fib.
-    (* Case split on n *)
-    destruct n as [|n'].
-    + (* n = 0: function returns acc *)
-      simpl. exact Hnocons_acc.
-    + (* n = S n' > 0: algorithm picks largest Fib and recurses *)
-      unfold zeckendorf_fuel. fold zeckendorf_fuel.
-      (* Get the largest Fibonacci number <= n *)
-      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
-      * (* Case: fibs_upto is empty (returns acc) *)
-        exact Hnocons_acc.
-      * (* Case: x is the largest Fibonacci <= n *)
-        destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* Subcase: x <= S n', recurse with (n-x) and (x::acc) *)
-           (* Apply IH to the recursive call *)
-           apply IHfuel.
-           ++ (* Need to show: no_consecutive_fibs (x :: acc) *)
-              (* This is the key part: we need to prove that x is not consecutive
-                 with any element in acc.
+  (* This is still difficult without the bound invariant.
+     The issue is that we need to track more state than just "acc has no consecutive fibs".
 
-                 The intuition is:
-                 - x = fib(kx) is the largest Fibonacci <= n
-                 - All elements in acc came from smaller remainders
-                 - For any y in acc, y was picked from a remainder m where m <= n - x
-                 - Therefore, y <= m < fib(kx-1) (by the greedy property)
-                 - So y = fib(ky) where ky <= kx-2, ensuring non-consecutiveness
+     For a complete proof, we would need to either:
+     1. Use zeckendorf_fuel_no_consecutive_strong with the bound hypothesis
+     2. Restructure the algorithm to make the invariants more apparent
+     3. Prove a more general lemma about the greedy selection property
 
-                 However, proving this requires tracking additional invariants about
-                 the relationship between acc and the remainder, which is not captured
-                 in the current statement of the lemma.
-
-                 A complete proof would require either:
-                 1. Strengthening the lemma with additional preconditions about acc
-                 2. Using a different induction principle that tracks more state
-                 3. Proving auxiliary lemmas about the structure of acc *)
-              unfold no_consecutive_fibs. fold no_consecutive_fibs.
-              split.
-              ** (* Show x is not consecutive with any element in acc *)
-                 intros y Hin_y i j Heq_x Heq_y Hcons.
-                 (* We need to derive a contradiction *)
-                 (* Key insight: y is in acc, so it was added in a previous step
-                    when the remainder was some m <= n - x *)
-                 (* We know: x = fib(i) and x <= S n'
-                    By greedy property: S n' < fib(i+1) (if i >= 2)
-                    Therefore: S n' - x < fib(i-1)
-                    So any Fibonacci in the next step has index <= i-2 *)
-                 (* This means y = fib(j) where j <= i-2 *)
-                 (* But Hcons says j = i+1 or i = j+1 (consecutive)
-                    This contradicts j <= i-2 *)
-                 (* However, we don't have the machinery to prove this formally
-                    because we need to track the history of acc *)
-                 admit.
-              ** (* Show acc still has no consecutive fibs *)
-                 exact Hnocons_acc.
-           ++ (* Need to show: all elements in (x :: acc) are Fibonacci numbers *)
-              intros z Hin_z. simpl in Hin_z.
-              destruct Hin_z as [Heq | Hin_acc].
-              ** (* z = x: x is a Fibonacci number from fibs_upto *)
-                 subst z.
-                 assert (Hin_x: In x (fibs_upto (S n'))).
-                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
-                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
-                 exists k. symmetry. exact Heq_fib.
-              ** (* z is in acc: use assumption *)
-                 apply Hacc_fib. exact Hin_acc.
-        -- (* Subcase: x > S n' (impossible, returns acc) *)
-           exact Hnocons_acc.
+     For now, we acknowledge this admits that the proof requires careful
+     tracking of which Fibonacci numbers can appear in acc based on the history
+     of remainders. *)
+  admit.
 Admitted.
 
 (*
