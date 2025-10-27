@@ -143,9 +143,75 @@ Proof.
         -- (* x = fib (n2 + 3) *)
           subst x. exists (n2 + 3). split. lia. reflexivity.
         -- (* x is in xs *)
-          apply IHn1 in Hin_xs.
-          unfold all_fibs in Hin_xs.
-          apply Hin_xs. exact Hin_xs'.
+          (* Need to apply IH to n2, but IHn1 is for S n2 *)
+          (* We need a separate IH for n2 < S (S n2) *)
+          assert (IHn2: forall l, In l (zeck_lists n2) -> all_fibs l).
+          { intros l' Hin'. apply IHn1.
+            simpl. apply in_or_app. left. exact Hin'. }
+          apply IHn2; assumption.
+Qed.
+
+(* Helper: Fibonacci is injective for indices >= 2 *)
+Lemma fib_injective_2 : forall i j,
+  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
+Proof.
+  intros i j Hi Hj Heq.
+  (* This is proven in zeckendorf.v as fib_injective *)
+  (* For now we admit it and import from the other file *)
+  admit.
+Admitted.
+
+(* Key Lemma: Maximum Fibonacci index in lists from zeck_lists n is at most n+1
+   (for n >= 1; for n=0 there are no elements) *)
+Lemma zeck_lists_max_fib_index : forall n l x,
+  In l (zeck_lists n) ->
+  In x l ->
+  exists k, k >= 1 /\ k <= n + 1 /\ fib k = x.
+Proof.
+  induction n as [|n1 IHn1]; intros l x Hin_l Hin_x.
+  - (* n = 0: zeck_lists 0 = [[]] *)
+    simpl in Hin_l. destruct Hin_l as [Heq | Hf].
+    + subst. inversion Hin_x.
+    + inversion Hf.
+  - (* n = S n1 *)
+    destruct n1 as [|n2].
+    + (* n = 1: zeck_lists 1 = [[], [1]] *)
+      (* Max index should be 1 + 1 = 2, and 1 = fib 1 = fib 2 *)
+      simpl in Hin_l.
+      destruct Hin_l as [Heq | [Heq | Hf]].
+      * subst. inversion Hin_x.
+      * subst. simpl in Hin_x.
+        destruct Hin_x as [Heq | Hf].
+        -- subst. (* 1 = fib 1, but also fib 2; we use index 2 for n=1 *)
+          exists 2. split; [lia|]. split; [lia|reflexivity].
+        -- inversion Hf.
+      * inversion Hf.
+    + (* n = S (S n2): max index should be S (S n2) + 1 = n2 + 3 *)
+      simpl in Hin_l. apply in_app_or in Hin_l.
+      destruct Hin_l as [Hin1 | Hin2].
+      * (* l from part1: zeck_lists (S n2), max index is (S n2) + 1 = n2 + 2 *)
+        assert (H: exists k, k >= 1 /\ k <= S n2 + 1 /\ fib k = x).
+        { apply IHn1; assumption. }
+        destruct H as [k [Hk1 [Hk2 Heq]]].
+        exists k. split; [exact Hk1|]. split; [lia|exact Heq].
+      * (* l from part2: fib(n2+3) :: xs where xs from zeck_lists n2 *)
+        apply in_map_iff in Hin2.
+        destruct Hin2 as [xs [Heq Hin_xs]]. subst l.
+        simpl in Hin_x. destruct Hin_x as [Heq | Hin_xs'].
+        -- (* x = fib(n2+3): this IS the max index for level S (S n2) *)
+          subst. exists (n2 + 3).
+          split; [lia|]. split; [lia|reflexivity].
+        -- (* x from xs, which is from zeck_lists n2, max index n2 + 1 *)
+          assert (IHn2: forall l x, In l (zeck_lists n2) -> In x l ->
+                        exists k, k >= 1 /\ k <= n2 + 1 /\ fib k = x).
+          { intros l' x' Hin_l' Hin_x'.
+            apply IHn1.
+            - simpl. apply in_or_app. left. exact Hin_l'.
+            - exact Hin_x'. }
+          assert (H: exists k, k >= 1 /\ k <= n2 + 1 /\ fib k = x).
+          { apply IHn2; assumption. }
+          destruct H as [k [Hk1 [Hk2 Heq]]].
+          exists k. split; [exact Hk1|]. split; [lia|exact Heq].
 Qed.
 
 (* Lemma: All lists in zeck_lists n have non-consecutive Fibonacci numbers *)
@@ -179,12 +245,61 @@ Proof.
         simpl. split.
         -- (* Show fib(n2+3) is not consecutive with any element in xs *)
           intros y Hin_y i j Heq_i Heq_j Hcons.
-          (* Key: elements in xs come from zeck_lists n2, which have max index n2+2 *)
-          (* But we're adding fib(n2+3), which is separated by a gap *)
-          (* We need a helper lemma about max indices in zeck_lists *)
-          admit.
+          (* Key insight from the outline:
+             - y is in xs, which comes from zeck_lists n2
+             - By zeck_lists_max_fib_index: y = fib(ky) where ky <= n2 + 2
+             - We have i such that fib(i) = fib(n2+3), so i = n2+3
+             - And j such that fib(j) = y = fib(ky), so j = ky (assuming j >= 2)
+             - Consecutive means j = i+1 or i = j+1
+             - If j = i+1 = n2+4, but ky <= n2+2, so j <= n2+2 < n2+4, contradiction
+             - If i = j+1, then n2+3 = ky+1, so ky = n2+2
+               But we're consing fib(n2+3) onto lists from level n2,
+               and the max index there is n2+2, BUT we're skipping one level! *)
+
+          (* First, establish that i = n2 + 3 *)
+          assert (Hi_eq: i = n2 + 3).
+          { (* fib is injective for indices >= 2 *)
+            (* From Heq_i: fib i = fib (n2 + 3) *)
+            apply fib_injective_2; try lia.
+            (* Need to show i >= 2 and n2 + 3 >= 2 *)
+            - (* i >= 2: need to establish from context *)
+              admit. (* This requires proving all indices in our construction are >= 2 *)
+            - exact Heq_i. }
+
+          (* Next, establish j <= n2 + 1 (KEY: this is the corrected bound!) *)
+          assert (Hj_bound: exists ky, ky >= 1 /\ ky <= n2 + 1 /\ fib ky = y).
+          { apply zeck_lists_max_fib_index with (n := n2) (l := xs); assumption. }
+          destruct Hj_bound as [ky [Hky_ge [Hky_le Heq_ky]]].
+
+          (* Establish j = ky *)
+          assert (Hj_eq: j = ky).
+          { (* From Heq_j: fib j = y and Heq_ky: fib ky = y *)
+            (* So fib j = fib ky *)
+            symmetry in Heq_j. rewrite Heq_ky in Heq_j.
+            apply fib_injective_2; try lia.
+            - (* j >= 2: need to establish from context *)
+              admit. (* This also requires proving all indices >= 2 *)
+            - (* ky >= 2: from Hky_ge >= 1, but we need >= 2 *)
+              admit. (* May need to strengthen the bound or handle fib 1 = fib 2 case *)
+            - exact Heq_j. }
+
+          (* Now derive contradiction from consecutiveness *)
+          subst i j.
+          unfold fib_consecutive in Hcons.
+          destruct Hcons as [Hcons1 | Hcons2].
+          ++ (* ky = S (n2 + 3) = n2 + 4 *)
+            (* But ky <= n2 + 1 by our bound *)
+            lia.
+          ++ (* n2 + 3 = S ky, so ky = n2 + 2 *)
+            (* But ky <= n2 + 1 by our bound *)
+            (* So ky <= n2 + 1 < n2 + 2, contradiction! *)
+            (* This completes the proof that fib(n2+3) is not consecutive with any element in xs *)
+            lia.
         -- (* xs itself has no consecutive fibs *)
-          apply IHn1. exact Hin_xs.
+          assert (IHn2: forall l, In l (zeck_lists n2) -> no_consecutive_fibs l).
+          { intros l' Hin'. apply IHn1.
+            simpl. apply in_or_app. left. exact Hin'. }
+          apply IHn2. exact Hin_xs.
 Admitted.
 
 (* Lemma: Count how many lists are in zeck_lists n *)
