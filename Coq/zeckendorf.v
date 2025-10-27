@@ -780,6 +780,29 @@ Proof.
     lia.
 Qed.
 
+(* Helper: list_max of non-empty list is never None *)
+Lemma list_max_some : forall (x : nat) (xs : list nat),
+  exists m, list_max (x :: xs) = Some m.
+Proof.
+  intros x xs.
+  generalize dependent x.
+  induction xs as [|y ys IH]; intro x.
+  - (* Base case: singleton list [x] *)
+    exists x. reflexivity.
+  - (* Inductive case: list is x :: y :: ys *)
+    specialize (IH y).
+    destruct IH as [m Heq].
+    exists (Nat.max x m).
+    (* Manually unfold the definition for the outer list_max only *)
+    change (list_max (x :: y :: ys)) with
+      (match list_max (y :: ys) with
+       | None => Some x
+       | Some m' => Some (Nat.max x m')
+       end).
+    rewrite Heq.
+    reflexivity.
+Qed.
+
 (* Helper lemma: if x is in a list and the list has max m, then x <= m *)
 Lemma in_list_le_max : forall x l m,
   In x l ->
@@ -802,12 +825,11 @@ Proof.
            rewrite <- Heq_m. transitivity m'.
            ++ exact H.
            ++ apply Nat.le_max_r.
-      * (* TODO: This case is impossible because list_max of non-empty list is never None.
-           Requires a helper lemma: forall x xs, exists m, list_max (x :: xs) = Some m *)
-        exfalso. destruct l'' as [|c l'''].
-        -- simpl in Hmax'. discriminate Hmax'.
-        -- admit. (* list_max (b :: c :: l''') = None is impossible *)
-Admitted.
+      * (* This case is impossible: list_max (b :: l'') = None *)
+        exfalso.
+        destruct (list_max_some b l'') as [m'' Heq].
+        rewrite Hmax' in Heq. discriminate Heq.
+Qed.
 
 (*
   Helper: If a list has max fib(k) and contains fib(i), then fib(i) <= fib(k)
@@ -853,18 +875,76 @@ Proof.
   intros l k. revert l. induction k as [k IHk] using lt_wf_ind.
   intros l Hnocons Hfib Hmax.
 
-  (* Base case: k = 0 or k = 1 *)
+  (* Base cases: k = 0, 1, 2 *)
   destruct k as [|[|k'']].
-  - (* k = 0: fib 0 = 0, so list has max 0, contradicts that elements are positive fibs *)
-    (* This case is actually impossible if the list is non-empty *)
+  - (* k = 0: fib 0 = 0, so list has max 0 *)
+    (* If max is 0, all elements are <= 0. Since Fibs are non-negative, all elements are 0 *)
+    (* So sum_list l = 0 < fib 1 = 1 *)
+    simpl. (* fib 1 = 1 *)
+    (* Show that sum_list l = 0 *)
+    destruct l as [|x xs].
+    + (* l = [] contradicts list_max [] = Some 0 *)
+      simpl in Hmax. discriminate Hmax.
+    + (* l = x :: xs has max 0 *)
+      (* All elements are <= 0 by in_list_le_max *)
+      assert (Hx_le: x <= 0).
+      { apply (in_list_le_max x (x :: xs) 0).
+        - left. reflexivity.
+        - exact Hmax. }
+      (* Similarly, all elements in xs are 0 *)
+      assert (Hxs_zero: forall y, In y xs -> y = 0).
+      { intros y Hin_y.
+        assert (Hy_le: y <= 0).
+        { apply (in_list_le_max y (x :: xs) 0).
+          - right. exact Hin_y.
+          - exact Hmax. }
+        lia. }
+      (* Since x <= 0 and x >= 0 (Fib), we have x = 0 *)
+      assert (Hx_eq: x = 0) by lia.
+      (* Therefore sum_list (x :: xs) = 0 *)
+      subst x.
+      clear Hnocons Hfib Hmax Hx_le.
+      (* Prove sum_list (0 :: xs) = 0 by showing all elements are 0 *)
+      assert (Hsum: sum_list (0 :: xs) = 0).
+      { simpl. induction xs as [|z zs IHxs].
+        - reflexivity.
+        - assert (Hz_eq: z = 0) by (apply Hxs_zero; left; reflexivity).
+          subst z. simpl.
+          assert (IH: sum_list zs = 0).
+          { apply IHxs. intros y Hy. apply Hxs_zero. right. exact Hy. }
+          lia. }
+      lia.
+
+  - (* k = 1: fib 1 = 1, fib 2 = 1 *)
+    (* This case is tricky because fib 1 = fib 2 = 1 *)
+    (* For the lemma to work properly, we need k >= 2 for strict monotonicity *)
+    (* We'll admit this for now and focus on k >= 2 *)
     admit.
-  - (* k = 1: fib 1 = 1, need to show sum < fib 2 = 1, so sum = 0, but max = 1 *)
-    (* This means the list must be [1], and sum [1] = 1 < 1 is false *)
-    (* Actually we need sum [1] = 1 < fib 2 = 1, which is also false *)
-    (* Let me reconsider: fib 1 = 1, fib 2 = 1 *)
-    admit.
-  - (* k >= 2: Use the inductive strategy *)
-    (* TODO: This requires careful analysis of list structure and the non-consecutive property *)
+
+  - (* k >= 2: Main inductive case *)
+    (* We have: list l with max = fib (S (S k'')), no consecutive Fibs *)
+    (* Goal: sum_list l < fib (S (S (S k''))) *)
+
+    (* Key insight: By non-consecutive property, fib(k-1) = fib(S k'') is NOT in l *)
+    (* So all elements besides fib k have indices at most k-2 *)
+
+    (* First, show that fib k < fib (S k) using monotonicity *)
+    assert (Hfib_mono: fib (S (S k'')) < fib (S (S (S k'')))).
+    { apply fib_mono. lia. }
+
+    (* Use the recurrence: fib(S k) = fib k + fib(k-1) *)
+    assert (Hrecur: fib (S (S (S k''))) = fib (S (S k'')) + fib (S k'')).
+    { apply fib_recurrence. lia. }
+
+    (* Rewrite goal using recurrence *)
+    rewrite Hrecur.
+
+    (* Now we need: sum_list l < fib(S (S k'')) + fib(S k'') *)
+    (* Strategy: Show that sum_list l <= fib(S (S k'')) + (something < fib(S k'')) *)
+
+    (* This requires analyzing the list structure, which is complex *)
+    (* We need to show that removing fib k from the list leaves elements with max <= fib(k-2) *)
+    (* This is non-trivial and requires additional helper lemmas *)
     admit.
 Admitted.
 
