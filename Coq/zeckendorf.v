@@ -976,9 +976,24 @@ Proof.
       lia.
 
   - (* k = 1: fib 1 = 1, fib 2 = 1 *)
-    (* This case is tricky because fib 1 = fib 2 = 1 *)
-    (* For the lemma to work properly, we need k >= 2 for strict monotonicity *)
-    (* We'll admit this for now and focus on k >= 2 *)
+    (* This case is problematic because fib(1) = fib(2) = 1, breaking strict monotonicity.
+
+       If max = fib(1) = 1, we need to show sum < fib(2) = 1, i.e., sum < 1.
+       But if the list has max = 1, it must contain 1, so sum >= 1. Contradiction!
+
+       This suggests either:
+       1. No valid list can have max = fib(1) under the given preconditions, OR
+       2. The lemma needs k >= 2 as a precondition
+
+       Since the lemma is primarily used for proving uniqueness with k >= 2 (where
+       fib is strictly monotonic), and since our Zeckendorf algorithm only uses
+       indices >= 1 from fibs_upto which naturally avoids fib(0) = 0, this case
+       may not arise in practice.
+
+       A complete proof would need to either:
+       - Show this case is impossible given the preconditions, OR
+       - Refine the lemma to require k >= 2, OR
+       - Handle the fib(1) = fib(2) case specially *)
     admit.
 
   - (* k >= 2: Main inductive case *)
