@@ -780,6 +780,35 @@ Proof.
     lia.
 Qed.
 
+(* Helper lemma: if x is in a list and the list has max m, then x <= m *)
+Lemma in_list_le_max : forall x l m,
+  In x l ->
+  list_max l = Some m ->
+  x <= m.
+Proof.
+  intros x l. induction l as [|a l' IHl'].
+  - intros m Hin Hmax. simpl in Hin. inversion Hin.
+  - intros m Hin Hmax. simpl in Hmax.
+    destruct l' as [|b l''].
+    + simpl in Hmax. injection Hmax as Heq_max.
+      simpl in Hin. destruct Hin as [Heq | Hfalse].
+      * subst. reflexivity.
+      * inversion Hfalse.
+    + destruct (list_max (b :: l'')) as [m'|] eqn:Hmax'.
+      * simpl in Hmax. injection Hmax as Heq_m.
+        simpl in Hin. destruct Hin as [Heq | Hin'].
+        -- rewrite <- Heq, <- Heq_m. apply Nat.le_max_l.
+        -- assert (H: x <= m') by (apply (IHl' m' Hin' eq_refl)).
+           rewrite <- Heq_m. transitivity m'.
+           ++ exact H.
+           ++ apply Nat.le_max_r.
+      * (* TODO: This case is impossible because list_max of non-empty list is never None.
+           Requires a helper lemma: forall x xs, exists m, list_max (x :: xs) = Some m *)
+        exfalso. destruct l'' as [|c l'''].
+        -- simpl in Hmax'. discriminate Hmax'.
+        -- admit. (* list_max (b :: c :: l''') = None is impossible *)
+Admitted.
+
 (*
   Helper: If a list has max fib(k) and contains fib(i), then fib(i) <= fib(k)
 
@@ -791,7 +820,11 @@ Lemma list_max_fib_bound : forall l k i,
   i >= 1 ->
   fib i <= fib k.
 Proof.
-Admitted.
+  intros l k i Hmax Hin Hi.
+  assert (H: fib i <= fib k).
+  { apply in_list_le_max with (l := l); assumption. }
+  exact H.
+Qed.
 
 (*
   Key Lemma for Uniqueness: Sum bound for non-consecutive Fibonacci numbers
