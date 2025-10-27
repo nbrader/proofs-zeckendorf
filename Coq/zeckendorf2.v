@@ -306,33 +306,29 @@ Admitted.
 Lemma zeck_lists_length : forall n,
   length (zeck_lists n) = fib (n + 2).
 Proof.
-  induction n as [|n1 IHn1].
+  intro n. pattern n. apply lt_wf_ind. clear n.
+  intros n IH.
+  destruct n as [|n1].
   - (* n = 0: length [[]] = 1 = fib 2 *)
     simpl. reflexivity.
   - destruct n1 as [|n2].
     + (* n = 1: length [[], [1]] = 2 = fib 3 *)
       simpl. reflexivity.
-    + (* n = S (S n2) *)
+    + (* n = S (S n2): use strong induction to get both IHs *)
       simpl. rewrite app_length. rewrite map_length.
-      (* length(part1) + length(part2) = length(zeck_lists(S n2)) + length(zeck_lists n2) *)
-      rewrite IHn1.
-      (* Need IH for n2 *)
+      (* Apply IH to both predecessors *)
+      assert (IHn1: length (zeck_lists (S n2)) = fib (S n2 + 2)).
+      { apply IH. lia. }
       assert (IHn2: length (zeck_lists n2) = fib (n2 + 2)).
-      { (* This should follow from IHn1 applied to n2, but we need n2 < S (S n2) *)
-        admit.
-      }
-      rewrite IHn2.
+      { apply IH. lia. }
+      rewrite IHn1, IHn2.
       (* Goal: fib(S n2 + 2) + fib(n2 + 2) = fib(S (S n2) + 2) *)
-      replace (S n2 + 2) with (S (S (n2 + 1))) by lia.
-      replace (S (S n2) + 2) with (S (S (S (n2 + 1)))) by lia.
-      replace (n2 + 2) with (S (n2 + 1)) by lia.
-      (* Now we need: fib(n+2) + fib(n+1) = fib(n+3) *)
-      (* This is just the Fibonacci recurrence *)
-      rewrite <- fib_SS.
-      replace (S (S (n2 + 1))) with (S (n2 + 2)) by lia.
-      replace (S (S (S (n2 + 1)))) with (S (S (n2 + 2))) by lia.
-      reflexivity.
-Admitted.
+      (* This is the Fibonacci recurrence *)
+      replace (S n2 + 2) with (S (n2 + 2)) by lia.
+      replace (S (S n2) + 2) with (S (S (n2 + 2))) by lia.
+      (* fib (S (n2+2)) + fib (n2+2) = fib (S (S (n2+2))) *)
+      rewrite <- fib_SS. reflexivity.
+Qed.
 
 (* Lemma: The sum of the nth list in zeck_lists equals... *)
 (* This needs more thought about the indexing scheme *)
