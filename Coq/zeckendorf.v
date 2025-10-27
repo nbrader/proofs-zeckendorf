@@ -849,18 +849,23 @@ Lemma sum_nonconsec_fibs_bounded : forall l k,
   list_max l = Some (fib k) ->
   sum_list l < fib (S k).
 Proof.
-  (* This proof requires:
-     1. Induction on k (or on the list structure)
-     2. Base case: singleton list [fib k] has sum fib k < fib (S k)
-     3. Inductive case:
-        - If list has max fib k and other elements
-        - By non-consecutive property, fib(k-1) is NOT in the list
-        - So remaining elements have max ≤ fib(k-2)
-        - By IH, sum(rest) < fib(k-1)
-        - Total sum < fib k + fib(k-1) = fib(S k)
+  (* Induction on k *)
+  intros l k. revert l. induction k as [k IHk] using lt_wf_ind.
+  intros l Hnocons Hfib Hmax.
 
-     The full proof requires careful handling of list operations and Fibonacci indices.
-  *)
+  (* Base case: k = 0 or k = 1 *)
+  destruct k as [|[|k'']].
+  - (* k = 0: fib 0 = 0, so list has max 0, contradicts that elements are positive fibs *)
+    (* This case is actually impossible if the list is non-empty *)
+    admit.
+  - (* k = 1: fib 1 = 1, need to show sum < fib 2 = 1, so sum = 0, but max = 1 *)
+    (* This means the list must be [1], and sum [1] = 1 < 1 is false *)
+    (* Actually we need sum [1] = 1 < fib 2 = 1, which is also false *)
+    (* Let me reconsider: fib 1 = 1, fib 2 = 1 *)
+    admit.
+  - (* k >= 2: Use the inductive strategy *)
+    (* TODO: This requires careful analysis of list structure and the non-consecutive property *)
+    admit.
 Admitted.
 
 (*
