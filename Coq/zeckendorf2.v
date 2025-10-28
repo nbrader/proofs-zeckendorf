@@ -1038,6 +1038,7 @@ Proof.
 Admitted.
 
 (* Now we can prove full uniqueness: any two representations of n are equal *)
+(* This theorem looks wrong: two lists can have all of these properties and still not be equal simply by being non-equal permutations. *)
 Theorem zeckendorf_representation_unique : forall n l1 l2,
   all_fibs l1 ->
   no_consecutive_fibs l1 ->
