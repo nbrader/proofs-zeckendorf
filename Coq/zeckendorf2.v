@@ -399,26 +399,21 @@ Proof.
           { destruct ky as [|[|ky'']].
             - lia. (* ky >= 1 *)
             - (* ky = 1, ky' >= 2, fib 1 = fib 2 = 1 *)
-              right. split; [reflexivity|].
-              (* fib ky' = fib 1 = 1, and ky' >= 2 *)
-              (* So fib ky' = 1 = fib 2, thus ky' = 2 *)
-              assert (Heq: fib ky' = fib 2).
-              { rewrite <- Heq_ky'. rewrite <- Heq_ky. reflexivity. }
-              destruct ky' as [|[|ky''']]; try lia.
-              (* fib 2 = 1, fib (S (S (S ky'''))) = 1 *)
-              (* For ky' >= 3: fib ky' >= fib 3 = 2 > 1, contradiction *)
-              exfalso.
-              assert (Hfib3: fib 3 = 2) by reflexivity.
-              assert (H3: fib (S (S (S ky'''))) >= fib 3).
-              { destruct ky'''; try (simpl; lia).
-                apply Nat.le_trans with (m := fib 3); try lia.
-                assert (Hmon: fib 3 <= fib (S (S (S (S ky''''))))).
-                { apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
-                exact Hmon. }
-              rewrite <- Heq in H3. rewrite Hfib3 in H3. simpl in Heq. lia.
+              right. split.
+              + reflexivity. (* ky = 1 *)
+              + (* Show ky' = 2 *)
+                (* fib ky' = fib 1 = 1, and ky' >= 2 *)
+                (* So fib ky' = 1 = fib 2, thus ky' = 2 *)
+                assert (Heq_ky_both: fib ky' = fib 2).
+                { transitivity y.
+                  - exact Heq_ky'.
+                  - rewrite <- Heq_ky. simpl. reflexivity. }
+                (* Now use injectivity: both ky' and 2 are >= 2, and fib ky' = fib 2 *)
+                apply fib_injective_2; try lia; exact Heq_ky_both.
             - (* ky >= 2 *)
-              left. apply fib_injective_2; try lia.
-              rewrite Heq_ky. exact Heq_ky'. }
+              left.
+              apply fib_injective_2; try lia.
+              transitivity y; [symmetry; exact Heq_ky | exact Heq_ky']. }
 
           (* Establish j = ky (or handle the ky=1, ky'=2 case) *)
           assert (Hj_eq: j = ky' /\ ky' <= n2 + 1).
