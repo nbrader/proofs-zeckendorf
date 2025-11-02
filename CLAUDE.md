@@ -122,7 +122,7 @@ When modifying proofs:
 - The project is under MIT License (see LICENSE file)
 - Rough Working\wiki proof.txt shows an example of a plain english proof in full that this proof Coq proof can borrow from.
 
-## Latest Updates (2025-02-14)
+## Latest Updates (2025-11-02)
 
 - `fib_consecutive` has been renamed to the more general `nat_consecutive`; all callers in `Coq/zeckendorf.v` have been updated and `make` passes.
 - No admitted proofs have been discharged yet. The open obligations remain at:
