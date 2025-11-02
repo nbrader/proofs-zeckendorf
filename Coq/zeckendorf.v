@@ -627,6 +627,34 @@ Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
     no_consecutive_fibs xs
   end.
 
+(* Appending a single element to the end preserves the predicate when it is compatible *)
+Lemma no_consecutive_append_single : forall l x,
+  no_consecutive_fibs l ->
+  (forall y, In y l ->
+    forall i j, fib i = y -> fib j = x -> ~fib_consecutive i j) ->
+  no_consecutive_fibs (l ++ [x]).
+Proof.
+  induction l as [|a l IH]; intros x Hnoc Hcompat; simpl in *.
+  - split.
+    + intros y Hy. inversion Hy.
+    + constructor.
+  - destruct Hnoc as [Hhead Htail]. simpl. split.
+    + intros y Hy i j Hfi Hfj Hcons.
+      apply in_app_or in Hy.
+      destruct Hy as [Hy|Hy].
+      * specialize (Hhead y Hy i j Hfi Hfj).
+        apply Hhead. exact Hcons.
+      * simpl in Hy.
+        destruct Hy as [Hy|Hy].
+        -- subst y.
+           specialize (Hcompat a (or_introl eq_refl) i j Hfi Hfj).
+           apply Hcompat. exact Hcons.
+        -- contradiction.
+    + apply IH.
+      * exact Htail.
+      * intros y Hy i j Hfi Hfj.
+        apply (Hcompat y (or_intror Hy) i j Hfi Hfj).
+Qed.
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
