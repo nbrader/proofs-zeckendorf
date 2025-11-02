@@ -1025,6 +1025,102 @@ Proof.
 Qed.
 
 (*
+  ==============================================================================
+  FIBONACCI VALUE CHARACTERIZATION LEMMAS
+  ==============================================================================
+
+  These lemmas characterize which indices produce specific Fibonacci values.
+  They are essential for proving properties about lists of Fibonacci numbers.
+*)
+
+(*
+  Helper: fib(0) = 0
+
+  This is a simple computation lemma.
+*)
+Lemma fib_0 : fib 0 = 0.
+Proof.
+  reflexivity.
+Qed.
+
+(*
+  Helper: fib(i) = 1 implies i ∈ {1, 2}
+
+  This characterizes exactly which indices produce the Fibonacci value 1.
+
+  Proof strategy: Check all cases for i:
+  - i = 0: fib(0) = 0 ≠ 1
+  - i = 1: fib(1) = 1 ✓
+  - i = 2: fib(2) = 1 ✓
+  - i ≥ 3: fib(i) ≥ 2 by the recurrence relation
+*)
+Lemma fib_eq_1_iff : forall i,
+  fib i = 1 <-> i = 1 \/ i = 2.
+Proof.
+  intro i.
+  split.
+  - (* Forward direction: fib(i) = 1 → i ∈ {1, 2} *)
+    intro Heq.
+    destruct i as [|[|[|i']]].
+    + (* i = 0: fib(0) = 0 ≠ 1 *)
+      simpl in Heq. discriminate.
+    + (* i = 1: fib(1) = 1 *)
+      left. reflexivity.
+    + (* i = 2: fib(2) = 1 *)
+      right. reflexivity.
+    + (* i ≥ 3: fib(i) ≥ 2 by recurrence *)
+      exfalso.
+      (* fib(3) = fib(2) + fib(1) = 1 + 1 = 2 *)
+      assert (Hfib3: fib 3 = 2) by reflexivity.
+      (* fib is monotonically increasing for n ≥ 2 *)
+      destruct i' as [|i''].
+      * (* i = 3: fib(3) = 2 ≠ 1 *)
+        simpl in Heq. discriminate.
+      * (* i ≥ 4: use monotonicity *)
+        assert (Hmono: fib 3 < fib (S (S (S (S i''))))).
+        { apply fib_mono_lt; lia. }
+        rewrite Hfib3 in Hmono.
+        (* So fib(i) ≥ 2, contradicting fib(i) = 1 *)
+        lia.
+  - (* Backward direction: i ∈ {1, 2} → fib(i) = 1 *)
+    intros [H | H]; subst; reflexivity.
+Qed.
+
+(*
+  Helper: For i ≥ 3, fib(i) ≥ 2
+
+  This establishes that Fibonacci numbers grow beyond 1 starting from index 3.
+*)
+Lemma fib_ge_2 : forall i,
+  i >= 3 -> fib i >= 2.
+Proof.
+  intros i Hi.
+  destruct i as [|[|[|i']]].
+  - (* i = 0: contradicts i >=  3 *)
+    exfalso. lia.
+  - (* i = 1: contradicts i >= 3 *)
+    exfalso. lia.
+  - (* i = 2: contradicts i >= 3 *)
+    exfalso. lia.
+  - (* i ≥ 3 *)
+    (* fib(3) = 2 and fib is monotonic for n ≥ 2 *)
+    assert (Hfib3: fib 3 = 2) by reflexivity.
+    assert (Hmono: fib 3 <= fib (S (S (S i')))).
+    { destruct i' as [|i''].
+      - (* i = 3 *) lia.
+      - (* i ≥ 4 *)
+        apply Nat.lt_le_incl. apply fib_mono_lt; lia.
+    }
+    lia.
+Qed.
+
+(*
+  ==============================================================================
+  KEY LEMMA FOR UNIQUENESS
+  ==============================================================================
+*)
+
+(*
   Key Lemma for Uniqueness: Sum bound for non-consecutive Fibonacci numbers
 
   The sum of any non-empty list of distinct, non-consecutive Fibonacci numbers
@@ -1075,19 +1171,38 @@ Proof.
       (* So all elements are exactly 1, but we can have at most one occurrence due to distinctness *)
       (* Actually, we need to show sum_list l = 1 *)
       assert (Hsum_eq: sum_list l = 1).
-      { (* max = fib 2 = 1 must be in list *)
-        assert (H1_in: In 1 l).
-        { rewrite <- Hfib2_val. apply list_max_in. exact Hmax. }
-        (* All elements are <= 1 *)
+      { (* Proof strategy: Show that l contains exactly the single element 1.
+           Since max = fib(2) = 1:
+           - 1 is in l
+           - All elements are <= 1
+           - All elements are Fibonacci numbers
+           - The only positive Fibonacci <= 1 is 1 itself (fib 1 = fib 2 = 1)
+           - If there were two or more elements, they'd all be 1
+           - But then we'd have fib(1) and fib(2) in the list (both =1)
+           - This would violate no_consecutive_fibs since 1 and 2 are consecutive indices
+           - Therefore l = [1], so sum = 1 *)
+
+        (* 1 is in the list *)
+        assert (H1_in: In 1 l) by (rewrite <- Hfib2_val; apply list_max_in; exact Hmax).
+
+        (* All elements <= 1 *)
         assert (Hall_le_1: forall y, In y l -> y <= 1).
         { intros y Hy. rewrite <- Hfib2_val in Hmax.
           apply (in_list_le_max y l 1); assumption. }
-        (* All elements are Fibonacci numbers *)
-        (* So elements are either 0 or 1. But if 0 is in list, then sum >= 0 + 1 = 1,
-           and if there are two 1s (impossible by distinctness of values in Zeckendorf),
-           or if it's just [1], then sum = 1 *)
-        (* Actually, we can use a simpler argument: since 1 is in list and all other elements must be < 1,
-           but Fibs >= 1 for indices >= 1, we must have l = [1] or l has 0s *)
+
+        (* NOTE: This base case proof is complex because the lemma statement is missing
+           a "distinct elements" precondition that appears in the Wikipedia proof.
+           Without distinctness, the lemma is false: [1,1] has sum 2 which is not < fib(3) = 2.
+
+           The Wikipedia proof explicitly states: "The sum of any non-empty set of distinct,
+           non-consecutive Fibonacci numbers...". The word "set" and "distinct" are crucial.
+
+           For now, we admit this base case. A complete proof would either:
+           1. Add a distinctness precondition to the lemma, or
+           2. Prove that no_consecutive_fibs + max=fib(k) implies distinctness
+
+           The inductive case will have similar issues without distinctness.
+        *)
         admit.
       }
       rewrite Hsum_eq. lia.
