@@ -121,3 +121,15 @@ When modifying proofs:
 - Build artifacts (`.vo`, `.vos`, `.vok`, `.glob` files) are generated in the `Coq/` directory
 - The project is under MIT License (see LICENSE file)
 - Rough Working\wiki proof.txt shows an example of a plain english proof in full that this proof Coq proof can borrow from.
+
+## Latest Updates (2025-02-14)
+
+- `fib_consecutive` has been renamed to the more general `nat_consecutive`; all callers in `Coq/zeckendorf.v` have been updated and `make` passes.
+- No admitted proofs have been discharged yet. The open obligations remain at:
+  - `zeckendorf_fuel_no_consecutive` (`Coq/zeckendorf.v:790`)
+  - `sum_nonconsec_fibs_bounded` (`Coq/zeckendorf.v:1119`)
+  - `zeckendorf_unique` (`Coq/zeckendorf.v:1156`)
+- Recommended next steps:
+  1. Strengthen the accumulator invariant for the greedy algorithm so the non-consecutive lemma can be completed.
+  2. Finish the inductive argument for `sum_nonconsec_fibs_bounded`, then use it to prove `zeckendorf_unique`.
+  3. Once admits are resolved, rerun `make` (or `coqc`) to ensure the entire development stays closed.

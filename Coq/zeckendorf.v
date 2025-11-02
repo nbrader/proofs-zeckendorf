@@ -604,12 +604,12 @@ Qed.
 *)
 
 (*
-  Helper predicate: Two Fibonacci numbers are consecutive
+  Helper predicate: Two natural numbers are consecutive
 
-  fib_consecutive k1 k2 means that k1 and k2 are consecutive indices,
+  nat_consecutive k1 k2 means that k1 and k2 differ by exactly one,
   i.e., k2 = k1 + 1 or k1 = k2 + 1.
 *)
-Definition fib_consecutive (k1 k2 : nat) : Prop :=
+Definition nat_consecutive (k1 k2 : nat) : Prop :=
   k2 = S k1 \/ k1 = S k2.
 
 (*
@@ -623,15 +623,14 @@ Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
   | [] => True
   | x :: xs =>
     (forall y, In y xs ->
-      forall i j, fib i = x -> fib j = y -> ~fib_consecutive i j) /\
+      forall i j, fib i = x -> fib j = y -> ~nat_consecutive i j) /\
     no_consecutive_fibs xs
   end.
-
 (* Appending a single element to the end preserves the predicate when it is compatible *)
 Lemma no_consecutive_append_single : forall l x,
   no_consecutive_fibs l ->
   (forall y, In y l ->
-    forall i j, fib i = y -> fib j = x -> ~fib_consecutive i j) ->
+    forall i j, fib i = y -> fib j = x -> ~nat_consecutive i j) ->
   no_consecutive_fibs (l ++ [x]).
 Proof.
   induction l as [|a l IH]; intros x Hnoc Hcompat; simpl in *.
