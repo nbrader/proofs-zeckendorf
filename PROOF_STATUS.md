@@ -40,13 +40,15 @@ This branch focuses on completing the admitted proofs in `Coq/zeckendorf.v` for 
   - ✅ Monotonicity: fib(m+1) ≤ fib(k-1) via case split
   - ✅ Final combination with transitivity and add_lt_mono_l
 
-#### Remaining Admits (only 3!):
-1. **Line 1550**: m >= 2 for Fibonacci indices (requires additional precondition about indices >= 2 in proper Zeckendorf representations)
-2. **Line 1597**: Case where fib k is not at head (needs similar reasoning to the completed case where fib k is at head)
-3. Plus 1 in helper lemma (**line 675**): fib injectivity for consecutive indices (case where fib i = fib j with consecutive i,j)
+#### Remaining Admits (only 2!):
+1. **Line 1558**: m >= 2 for Fibonacci indices (requires additional precondition about indices >= 2 in proper Zeckendorf representations)
+2. **Line 1605**: Case where fib k is not at head (needs similar reasoning to the completed case where fib k is at head)
 
-#### New Helper Lemma:
-**no_consecutive_both_in**: General lemma proving that if no_consecutive_fibs l and both fib i and fib j are in l with consecutive indices, then False. Proved by structural induction with 1 admit for fib injectivity.
+#### New Helper Lemma - **COMPLETE!**:
+**no_consecutive_both_in**: General lemma proving that if no_consecutive_fibs l, fib i ≠ fib j, and both fib i and fib j are in l with consecutive indices, then False.
+- **Proved completely by structural induction** with fib i ≠ fib j precondition
+- Handles fib 1 = fib 2 edge case elegantly
+- Used in 2 places: base case k=2 and inductive case k≥3
 
 #### Why This Is Excellent Progress:
 - Main proof structure **100% complete** for the case where fib k is at head!
