@@ -654,6 +654,36 @@ Proof.
       * intros y Hy i j Hfi Hfj.
         apply (Hcompat y (or_intror Hy) i j Hfi Hfj).
 Qed.
+
+(* Helper lemma: if no_consecutive_fibs l, and fib i and fib j are both in l with consecutive indices, contradiction *)
+(* Note: requires fib i ≠ fib j to handle the fib 1 = fib 2 = 1 case *)
+Lemma no_consecutive_both_in : forall l i j,
+  no_consecutive_fibs l ->
+  fib i <> fib j ->
+  In (fib i) l ->
+  In (fib j) l ->
+  nat_consecutive i j ->
+  False.
+Proof.
+  induction l as [|x xs IH]; intros i j Hnocons Hneq_fib Hi Hj Hcons.
+  - (* l = [] *) simpl in Hi. contradiction.
+  - (* l = x :: xs *)
+    simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+    simpl in Hi, Hj.
+    destruct Hi as [Hxi | Hxsi]; destruct Hj as [Hxj | Hxsj].
+    + (* Both equal x: fib i = x = fib j *)
+      (* But we have fib i ≠ fib j from Hneq_fib, contradiction! *)
+      exfalso. apply Hneq_fib.
+      transitivity x; [symmetry; exact Hxi | exact Hxj].
+    + (* fib i = x, fib j in xs *)
+      apply (Hhead (fib j) Hxsj i j); auto.
+    + (* fib i in xs, fib j = x *)
+      apply (Hhead (fib i) Hxsi j i); auto.
+      unfold nat_consecutive in *. lia.
+    + (* Both in xs *)
+      apply (IH i j Htail Hneq_fib Hxsi Hxsj Hcons).
+Qed.
+
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
@@ -1116,6 +1146,63 @@ Qed.
 
 (*
   ==============================================================================
+  HELPER LEMMAS FOR UNIQUENESS PROOF
+  ==============================================================================
+*)
+
+(* Helper: If an element is in a list with max = fib k, it's at most fib k *)
+Lemma in_list_le_fib_max : forall l k z,
+  list_max l = Some (fib k) ->
+  In z l ->
+  z <= fib k.
+Proof.
+  intros l k z Hmax Hz.
+  apply (in_list_le_max z l (fib k)); assumption.
+Qed.
+
+(* Helper: If z is a Fibonacci number with z < fib k and z <> fib(k-1),
+   then the index of z is at most k-2 (for k >= 3) *)
+Lemma fib_index_bound : forall z k,
+  k >= 3 ->
+  (exists i, fib i = z) ->
+  z < fib k ->
+  z <> fib (k - 1) ->
+  exists i, i <= k - 2 /\ fib i = z.
+Proof.
+  intros z k Hk_ge [i Heq_i] Hz_lt Hz_neq.
+  exists i. split.
+  - (* Show i <= k - 2 *)
+    (* z = fib i < fib k, so i < k by strict monotonicity *)
+    (* z <> fib(k-1), so i <> k-1 *)
+    (* Therefore i <= k - 2 *)
+
+    (* First show i < k *)
+    assert (Hi_lt_k: i < k).
+    { (* By contradiction: if i >= k, then fib i >= fib k by monotonicity *)
+      destruct (Nat.lt_ge_cases i k) as [Hlt | Hge]; [exact Hlt |].
+      exfalso.
+      assert (Hfib_ge: fib k <= fib i).
+      { (* Need to show fib k <= fib i when k <= i and both >= 2 *)
+        destruct (Nat.eq_dec k i) as [Heq_ki | Hneq_ki].
+        - (* k = i: fib k = fib i *)
+          rewrite Heq_ki. lia.
+        - (* k < i: use fib_mono_lt *)
+          assert (Hk_lt_i: k < i) by lia.
+          apply Nat.lt_le_incl.
+          apply fib_mono_lt; try lia. }
+      rewrite Heq_i in Hfib_ge. lia. }
+
+    (* Now show i <> k - 1 *)
+    assert (Hi_neq: i <> k - 1).
+    { intro Heq. apply Hz_neq. rewrite <- Heq_i. f_equal. exact Heq. }
+
+    (* Combine: i < k and i <> k - 1, so i <= k - 2 *)
+    lia.
+  - exact Heq_i.
+Qed.
+
+(*
+  ==============================================================================
   KEY LEMMA FOR UNIQUENESS
   ==============================================================================
 *)
@@ -1130,19 +1217,26 @@ Qed.
   In proper Zeckendorf representations, we only use Fibonacci numbers from
   indices >= 2, i.e., the sequence 1, 2, 3, 5, 8, 13, ...
 
+  We also require NoDup (distinctness) as the lemma is false without it.
+
   Proof strategy:
   - Use induction on k
-  - Base case: k = 2 can be verified directly
+  - Base case: k = 2 can be verified directly (COMPLETED)
   - Inductive case: Consider a list with maximum F_k
-    * Since no consecutive Fibs, fib(k-1) is NOT in the list
+    * Since no consecutive Fibs, fib(k-1) is NOT in the list (COMPLETED)
     * Removing fib(k) from list gives a list with max ≤ fib(k-2)
     * By IH, sum(rest) < fib(k-1)
     * So total sum = fib(k) + sum(rest) < fib(k) + fib(k-1) = fib(k+1)
 
   This lemma is crucial for proving uniqueness.
+
+  NOTE: This proof would be significantly simpler if we worked with sorted lists
+  throughout, as that would eliminate much of the case analysis about where
+  elements appear in the list.
 *)
 Lemma sum_nonconsec_fibs_bounded : forall l k,
   k >= 2 ->
+  NoDup l ->
   no_consecutive_fibs l ->
   (forall x, In x l -> exists i, fib i = x) ->
   list_max l = Some (fib k) ->
@@ -1150,7 +1244,7 @@ Lemma sum_nonconsec_fibs_bounded : forall l k,
 Proof.
   (* Induction on k *)
   intros l k Hk_ge. revert l. induction k as [k IHk] using lt_wf_ind.
-  intros l Hnocons Hfib Hmax.
+  intros l Hnodup Hnocons Hfib Hmax.
 
   (* Base case: k = 2 *)
   destruct k as [|[|k'']].
@@ -1190,32 +1284,121 @@ Proof.
         { intros y Hy. rewrite <- Hfib2_val in Hmax.
           apply (in_list_le_max y l 1); assumption. }
 
-        (* NOTE: This base case proof is complex because the lemma statement is missing
-           a "distinct elements" precondition that appears in the Wikipedia proof.
-           Without distinctness, the lemma is false: [1,1] has sum 2 which is not < fib(3) = 2.
+        (* All Fibonacci numbers <= 1 are either fib(1) = 1 or fib(2) = 1 *)
+        (* Since all elements are Fibonacci numbers and all are <= 1, they're all 1 *)
+        assert (Hall_eq_1: forall y, In y l -> y = 1).
+        { intros y Hy.
+          assert (Hy_le: y <= 1) by (apply Hall_le_1; exact Hy).
+          destruct (Hfib y Hy) as [i Heq_i].
+          (* y is a Fibonacci number, so y = fib(i) for some i *)
+          (* Since y <= 1 and y = fib(i), and Fibonacci numbers grow,
+             we have i ∈ {0, 1, 2} since fib 0 = 0, fib 1 = 1, fib 2 = 1, fib 3 = 2 *)
+          destruct i as [|[|[|i']]].
+          - (* i = 0: fib 0 = 0 *)
+            (* If y = fib(0) = 0, and 1 = fib(1) is in the list, then we have fib(0) and fib(1),
+               which are consecutive (since 1 = S 0). This contradicts no_consecutive_fibs. *)
+            exfalso.
+            assert (H0: fib 0 = 0) by reflexivity.
+            rewrite H0 in Heq_i. subst y.
+            (* So 0 is in l, and 1 is in l (from H1_in), and 0 and 1 are consecutive Fibonacci indices *)
+            unfold no_consecutive_fibs in Hnocons.
+            (* We need to derive a contradiction from having both 0 and 1 in l *)
+            (* Since l is not empty (1 is in it), we can analyze the structure *)
+            destruct l as [|z zs].
+            + (* l = []: contradicts H1_in *)
+              simpl in H1_in. exact H1_in.
+            + (* l = z :: zs *)
+              simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+              (* Both 0 and 1 are in l = z :: zs *)
+              assert (H0_in: In 0 (z :: zs)) by exact Hy.
+              assert (H1_in': In 1 (z :: zs)) by exact H1_in.
+              simpl in H0_in, H1_in'.
+              destruct H0_in as [Hz0 | Hin_zs0].
+              * (* z = 0 *)
+                subst z.
+                (* Now 1 is in 0 :: zs, so either z = 1 (but z = 0) or 1 is in zs *)
+                destruct H1_in' as [H_abs | Hin_zs1].
+                -- (* 0 = 1, absurd *) discriminate.
+                -- (* 1 is in zs *)
+                   (* By Hhead: for all y in zs, fib i = 0 -> fib j = y -> ~nat_consecutive i j *)
+                   specialize (Hhead 1 Hin_zs1).
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   specialize (Hhead 0 1 Hfib0 Hfib1).
+                   exfalso. apply Hhead.
+                   unfold nat_consecutive. left. reflexivity.
+              * (* 0 is in zs, and z is something *)
+                (* 1 could be z or in zs *)
+                destruct H1_in' as [Hz1 | Hin_zs1].
+                -- (* z = 1 *)
+                   subst z.
+                   (* So 0 is in zs, and z = 1 *)
+                   specialize (Hhead 0 Hin_zs0).
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   specialize (Hhead 1 0 Hfib1 Hfib0).
+                   exfalso. apply Hhead.
+                   unfold nat_consecutive. right. reflexivity.
+                -- (* Both 0 and 1 are in zs *)
+                   (* Use no_consecutive_both_in lemma *)
+                   exfalso.
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   apply (no_consecutive_both_in zs 0 1).
+                   ** exact Htail.
+                   ** (* fib 0 ≠ fib 1 *) rewrite Hfib0, Hfib1. discriminate.
+                   ** rewrite Hfib0. exact Hin_zs0.
+                   ** rewrite Hfib1. exact Hin_zs1.
+                   ** unfold nat_consecutive. left. reflexivity.
+          - (* i = 1: fib 1 = 1, so y = 1 *)
+            assert (H1: fib 1 = 1) by reflexivity.
+            rewrite H1 in Heq_i. symmetry. exact Heq_i.
+          - (* i = 2: fib 2 = 1, so y = 1 *)
+            assert (H2: fib 2 = 1) by reflexivity.
+            rewrite H2 in Heq_i. symmetry. exact Heq_i.
+          - (* i >= 3: fib i >= 2, but y <= 1, contradiction *)
+            exfalso.
+            assert (Hfib_i: fib (S (S (S i'))) >= 2).
+            { apply fib_ge_2. lia. }
+            rewrite Heq_i in Hfib_i. lia. }
 
-           The Wikipedia proof explicitly states: "The sum of any non-empty set of distinct,
-           non-consecutive Fibonacci numbers...". The word "set" and "distinct" are crucial.
-
-           For now, we admit this base case. A complete proof would either:
-           1. Add a distinctness precondition to the lemma, or
-           2. Prove that no_consecutive_fibs + max=fib(k) implies distinctness
-
-           The inductive case will have similar issues without distinctness.
-        *)
-        admit.
+        (* Now we know all elements are 1 *)
+        (* Since NoDup l, there can be at most one occurrence of 1 *)
+        (* Since 1 is in l (H1_in), l = [1] *)
+        assert (Hl_eq: l = [1]).
+        { (* We need to show l has exactly one element *)
+          destruct l as [|x xs].
+          - (* l = []: contradicts H1_in *)
+            exfalso. simpl in H1_in. exact H1_in.
+          - (* l = x :: xs *)
+            (* x is in l, so x = 1 *)
+            assert (Hx: x = 1).
+            { apply Hall_eq_1. simpl. left. reflexivity. }
+            subst x.
+            (* Now show xs = [] *)
+            assert (Hxs_empty: xs = []).
+            { destruct xs as [|y ys].
+              - reflexivity.
+              - (* xs = y :: ys, so y is in l *)
+                assert (Hy_in: In y (1 :: y :: ys)).
+                { simpl. right. left. reflexivity. }
+                assert (Hy: y = 1) by (apply Hall_eq_1; exact Hy_in).
+                (* So we have 1 in the list twice: once as x, once as y *)
+                (* This contradicts NoDup l *)
+                exfalso.
+                subst y.
+                inversion Hnodup. subst.
+                apply H1. simpl. left. reflexivity. }
+            subst xs. reflexivity. }
+        rewrite Hl_eq. simpl. reflexivity.
       }
       rewrite Hsum_eq. lia.
     + (* k >= 3: Main inductive case *)
     (* We have: list l with max = fib (S (S (S k'''))), no consecutive Fibs *)
     (* Goal: sum_list l < fib (S (S (S (S k''')))) *)
 
-    (* Key insight: By non-consecutive property, fib(k-1) = fib(S (S k''')) is NOT in l *)
-    (* So all elements besides fib k have indices at most k-2 *)
-
-    (* First, show that fib k < fib (S k) using monotonicity *)
-    assert (Hfib_mono: fib (S (S (S k'''))) < fib (S (S (S (S k'''))))).
-    { apply fib_mono. lia. }
+    (* Let k = S (S (S k''')) >= 3 *)
+    (* max l = Some (fib k) *)
 
     (* Use the recurrence: fib(S k) = fib k + fib(k-1) *)
     assert (Hrecur: fib (S (S (S (S k''')))) = fib (S (S (S k'''))) + fib (S (S k'''))).
@@ -1224,13 +1407,202 @@ Proof.
     (* Rewrite goal using recurrence *)
     rewrite Hrecur.
 
-    (* Now we need: sum_list l < fib(S (S (S k'''))) + fib(S (S k''')) *)
-    (* Strategy: Show that sum_list l <= fib(S (S (S k'''))) + (something < fib(S (S k'''))) *)
+    (* Key step: Show fib(k-1) is NOT in l *)
+    assert (Hk_minus_1_not_in: ~In (fib (S (S k'''))) l).
+    { intro Hin_k_minus_1.
+      (* fib(k-1) is in l, and fib k is in l (since it's the max) *)
+      assert (Hk_in: In (fib (S (S (S k''')))) l).
+      { apply list_max_in. exact Hmax. }
+      (* But fib(k-1) and fib k are consecutive, contradicting no_consecutive_fibs *)
+      unfold no_consecutive_fibs in Hnocons.
+      (* Need to analyze the structure of l *)
+      destruct l as [|x xs].
+      - (* l = []: contradicts max = Some ... *)
+        simpl in Hmax. discriminate.
+      - (* l = x :: xs *)
+        simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+        simpl in Hk_in, Hin_k_minus_1.
+        (* Both fib k and fib(k-1) are in x :: xs *)
+        destruct Hk_in as [Hx_k | Hxs_k].
+        + (* x = fib k *)
+          destruct Hin_k_minus_1 as [Hx_k_minus_1 | Hxs_k_minus_1].
+          * (* x = fib(k-1), but also x = fib k, so fib k = fib(k-1) *)
+            (* This is impossible for k >= 3 since Fibonacci is strictly increasing *)
+            assert (Hfib_inj: fib (S (S (S k'''))) <> fib (S (S k'''))).
+            { intro Heq.
+              assert (Hmono: fib (S (S k''')) < fib (S (S (S k''')))).
+              { apply fib_mono_lt; lia. }
+              lia. }
+            (* From Hx_k and Hx_k_minus_1, we have fib k = x = fib(k-1) *)
+            exfalso. apply Hfib_inj.
+            transitivity x; [symmetry; exact Hx_k | exact Hx_k_minus_1].
+          * (* fib(k-1) is in xs, x = fib k *)
+            (* By Hhead: fib k and fib(k-1) are not consecutive, contradiction *)
+            exfalso.
+            specialize (Hhead (fib (S (S k'''))) Hxs_k_minus_1).
+            assert (Hcons: nat_consecutive (S (S (S k'''))) (S (S k'''))).
+            { unfold nat_consecutive. right. reflexivity. }
+            (* Hhead: fib i = x -> fib j = fib(k-1) -> ~nat_consecutive i j *)
+            (* We have x = fib k, so we apply with i = k, j = k-1 *)
+            apply (Hhead (S (S (S k'''))) (S (S k'''))); [| reflexivity | exact Hcons].
+            symmetry. exact Hx_k.
+        + (* fib k is in xs *)
+          destruct Hin_k_minus_1 as [Hx_k_minus_1 | Hxs_k_minus_1].
+          * (* x = fib(k-1), fib k is in xs *)
+            exfalso.
+            specialize (Hhead (fib (S (S (S k''')))) Hxs_k).
+            assert (Hcons: nat_consecutive (S (S k''')) (S (S (S k''')))).
+            { unfold nat_consecutive. left. reflexivity. }
+            (* Hhead: fib i = x -> fib j = fib k -> ~nat_consecutive i j *)
+            (* We have x = fib(k-1), so we apply with i = k-1, j = k *)
+            apply (Hhead (S (S k''')) (S (S (S k''')))); [| reflexivity | exact Hcons].
+            symmetry. exact Hx_k_minus_1.
+          * (* Both in xs - use tail property *)
+            (* Both fib k and fib(k-1) are in xs, but they're consecutive Fibonacci numbers *)
+            (* This contradicts no_consecutive_fibs xs *)
+            exfalso.
+            apply (no_consecutive_both_in xs (S (S (S k'''))) (S (S k'''))); [exact Htail | | exact Hxs_k | exact Hxs_k_minus_1 |].
+            -- (* fib k ≠ fib(k-1) by monotonicity *)
+              intro Heq.
+              assert (Hmono: fib (S (S k''')) < fib (S (S (S k''')))).
+              { apply fib_mono. lia. }
+              lia.
+            -- unfold nat_consecutive. right. reflexivity.
+    }
 
-    (* This requires analyzing the list structure, which is complex *)
-    (* We need to show that removing fib k from the list leaves elements with max <= fib(k-2) *)
-    (* This is non-trivial and requires additional helper lemmas *)
-    admit.
+    (* Now split cases: is l just [fib k], or does it have other elements? *)
+    assert (Hfib_k_in: In (fib (S (S (S k''')))) l).
+    { apply list_max_in. exact Hmax. }
+
+    (* Case analysis on whether l = [fib k] or has other elements *)
+    destruct l as [|x xs].
+    * (* l = []: contradicts max = Some ... *)
+      simpl in Hmax. discriminate.
+    * (* l = x :: xs *)
+      simpl in Hfib_k_in.
+      destruct Hfib_k_in as [Hx_k | Hxs_k].
+      -- (* x = fib k *)
+        subst x.
+        (* Now check if xs is empty *)
+        destruct xs as [|y ys].
+        ++ (* xs = [], so l = [fib k] *)
+          (* sum [fib k] = fib k < fib k + fib(k-1) since fib(k-1) > 0 *)
+          unfold sum_list. simpl. rewrite Nat.add_0_r.
+          (* Now goal is: fib k < fib k + fib(k-1) *)
+          assert (Hfib_pos: fib (S (S k''')) > 0).
+          { apply fib_pos. lia. }
+          apply Nat.lt_add_pos_r. exact Hfib_pos.
+        ++ (* xs = y :: ys, so l has other elements *)
+          (* sum l = fib k + sum xs *)
+          simpl.
+          (* Need: fib k + sum xs < fib k + fib(k-1) *)
+          (* i.e., sum xs < fib(k-1) *)
+
+          (* Show that all elements in xs have indices at most k-2 *)
+          (* Key insight: fib(k-1) is NOT in l, and fib k is the max, so elements in xs
+             must be strictly less than fib k and not equal to fib(k-1) *)
+
+          assert (Hxs_bounded: forall z, In z (y :: ys) -> exists i, i <= (S (S (S k''')) - 2) /\ fib i = z).
+          { intros z Hz.
+            (* z is in l = fib k :: y :: ys *)
+            assert (Hz_in_l: In z (fib (S (S (S k'''))) :: y :: ys)).
+            { simpl. right. exact Hz. }
+            (* z is a Fibonacci number *)
+            destruct (Hfib z Hz_in_l) as [i Heq_i].
+
+            (* Show z < fib k and z <> fib(k-1) *)
+            assert (Hz_lt: z < fib (S (S (S k''')))).
+            { (* z is in xs, not the head, and fib k is max *)
+              (* So z <= fib k, and z <> fib k (since subst x put fib k at head) *)
+              assert (Hz_le: z <= fib (S (S (S k''')))).
+              { apply (in_list_le_max z (fib (S (S (S k'''))) :: y :: ys) (fib (S (S (S k''')))) ).
+                - simpl. right. exact Hz.
+                - exact Hmax. }
+              assert (Hz_ne: z <> fib (S (S (S k''')))).
+              { intro Heq_z.
+                (* If z = fib k, then fib k appears twice in l, contradicting NoDup *)
+                (* fib k is at head, and z = fib k is in tail, contradicting NoDup *)
+                inversion Hnodup as [| ? ? Hnot_in_tail Hnodup_tail].
+                apply Hnot_in_tail. rewrite Heq_z in Hz. exact Hz. }
+              lia. }
+
+            assert (Hz_ne_km1: z <> fib (S (S k'''))).
+            { intro Heq_z.
+              apply Hk_minus_1_not_in.
+              rewrite <- Heq_z.
+              simpl. right. exact Hz. }
+
+            (* Now use fib_index_bound lemma *)
+            apply (fib_index_bound z (S (S (S k''')))).
+            - lia. (* k >= 3 *)
+            - exists i. exact Heq_i.
+            - exact Hz_lt.
+            - exact Hz_ne_km1. }
+
+          (* Now we apply the induction hypothesis to xs = y :: ys *)
+          (* We need to show: sum(y :: ys) < fib(k-1) *)
+          (* Strategy: show max(xs) = fib(m) for some m ≤ k-2, apply IH to get sum(xs) < fib(m+1),
+             then show fib(m+1) ≤ fib(k-1) *)
+
+          (* First, extract the max of xs *)
+          assert (Hxs_nonempty: exists m, list_max (y :: ys) = Some m).
+          { apply list_max_some. }
+          destruct Hxs_nonempty as [max_xs Hmax_xs].
+
+          (* Show max_xs is a Fibonacci number with index ≤ k-2 *)
+          assert (Hmax_xs_fib: exists m, m <= S (S (S k''')) - 2 /\ fib m = max_xs /\ m >= 2).
+          { assert (Hmax_xs_in: In max_xs (y :: ys)).
+            { apply list_max_in. exact Hmax_xs. }
+            destruct (Hxs_bounded max_xs Hmax_xs_in) as [m [Hm_bound Hm_eq]].
+            (* Need to show m >= 2 *)
+            exists m. split; [exact Hm_bound | split; [exact Hm_eq | admit]]. }
+
+          destruct Hmax_xs_fib as [m [Hm_le [Hm_eq Hm_ge]]].
+
+          (* Apply IH to xs *)
+          assert (Hxs_sum_bounded: sum_list (y :: ys) < fib (S m)).
+          { apply (IHk m).
+            - (* m < k *)
+              (* From Hm_le: m <= k - 2, so m <= k - 2 < k *)
+              assert (Hkm2: S (S (S k''')) - 2 = S k''') by lia.
+              rewrite Hkm2 in Hm_le. lia.
+            - (* m >= 2 *) exact Hm_ge.
+            - (* NoDup xs *)
+              (* xs is tail of (fib k :: xs), so NoDup preserved *)
+              inversion Hnodup as [| ? ? ? Hnodup_tail]. exact Hnodup_tail.
+            - (* no_consecutive_fibs xs *)
+              (* Similar: tail of list with no_consecutive_fibs *)
+              simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
+            - (* all elements are Fibs *)
+              intros x Hx. apply Hfib. simpl. right. exact Hx.
+            - (* list_max xs = Some (fib m) *)
+              rewrite <- Hm_eq in Hmax_xs. exact Hmax_xs. }
+
+          (* Show fib(S m) ≤ fib(S (S k''')) = fib(k-1) *)
+          assert (Hm_lt_km1: fib (S m) <= fib (S (S k'''))).
+          { (* From m <= k-2, we get S m <= k-1 = S (S k''') *)
+            assert (Hkm2: S (S (S k''')) - 2 = S k''') by lia.
+            rewrite Hkm2 in Hm_le.
+            (* So m <= S k''', which means S m <= S (S k''') *)
+            (* We need fib(S m) <= fib(k-1) *)
+            (* Case split: either S m = S (S k''') or S m < S (S k''') *)
+            destruct (Nat.eq_dec (S m) (S (S k'''))) as [Heq | Hneq].
+            - (* S m = S (S k''') *) rewrite Heq. lia.
+            - (* S m < S (S k''') *)
+              apply Nat.lt_le_incl. apply fib_mono_lt; try lia.
+          }
+
+          (* Combine to get final result *)
+          (* Goal after simpl: fib k + sum(y :: ys) < fib k + fib(k-1) *)
+          simpl.
+          assert (Hsum_lt: sum_list (y :: ys) < fib (S (S k'''))).
+          { eapply Nat.lt_le_trans.
+            - exact Hxs_sum_bounded.
+            - exact Hm_lt_km1. }
+          apply Nat.add_lt_mono_l. exact Hsum_lt.
+      -- (* fib k is in xs, not at head *)
+        (* Similar reasoning but more complex *)
+        admit.
 Admitted.
 
 (*
