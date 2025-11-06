@@ -1497,8 +1497,54 @@ Proof.
             - exact Hz_lt.
             - exact Hz_ne_km1. }
 
-          (* This is getting complex - need more helper lemmas *)
-          admit.
+          (* Now we apply the induction hypothesis to xs = y :: ys *)
+          (* We need to show: sum(y :: ys) < fib(k-1) *)
+          (* Strategy: show max(xs) = fib(m) for some m ≤ k-2, apply IH to get sum(xs) < fib(m+1),
+             then show fib(m+1) ≤ fib(k-1) *)
+
+          (* First, extract the max of xs *)
+          assert (Hxs_nonempty: exists m, list_max (y :: ys) = Some m).
+          { exists (Nat.max y (fold_right Nat.max 0 ys)).
+            admit. (* list_max of non-empty list exists *) }
+          destruct Hxs_nonempty as [max_xs Hmax_xs].
+
+          (* Show max_xs is a Fibonacci number with index ≤ k-2 *)
+          assert (Hmax_xs_fib: exists m, m <= S (S (S k''')) - 2 /\ fib m = max_xs /\ m >= 2).
+          { assert (Hmax_xs_in: In max_xs (y :: ys)).
+            { admit. (* max is in the list *) }
+            destruct (Hxs_bounded max_xs Hmax_xs_in) as [m [Hm_bound Hm_eq]].
+            (* Need to show m >= 2 *)
+            exists m. split; [exact Hm_bound | split; [exact Hm_eq | admit]]. }
+
+          destruct Hmax_xs_fib as [m [Hm_le [Hm_eq Hm_ge]]].
+
+          (* Apply IH to xs *)
+          assert (Hxs_sum_bounded: sum_list (y :: ys) < fib (S m)).
+          { apply (IHk m).
+            - (* m < k *) admit.
+            - (* m >= 2 *) exact Hm_ge.
+            - (* NoDup xs *) admit.
+            - (* no_consecutive_fibs xs *) admit.
+            - (* all elements are Fibs *) admit.
+            - (* list_max xs = Some (fib m) *)
+              rewrite <- Hm_eq in Hmax_xs. exact Hmax_xs. }
+
+          (* Show fib(S m) ≤ fib(S (S k''')) = fib(k-1) *)
+          assert (Hm_lt_km1: fib (S m) <= fib (S (S k'''))).
+          { apply Nat.lt_le_incl. apply fib_mono_lt.
+            - admit. (* m >= 2 implies S m >= 2 *)
+            - admit. (* k-1 >= 2 *)
+            - admit. (* S m < S (S k''') from m ≤ k-2 *)
+          }
+
+          (* Combine to get final result *)
+          (* Goal after simpl: fib k + sum(y :: ys) < fib k + fib(k-1) *)
+          simpl.
+          assert (Hsum_lt: sum_list (y :: ys) < fib (S (S k'''))).
+          { eapply Nat.lt_le_trans.
+            - exact Hxs_sum_bounded.
+            - exact Hm_lt_km1. }
+          apply Nat.add_lt_mono_l. exact Hsum_lt.
       -- (* fib k is in xs, not at head *)
         (* Similar reasoning but more complex *)
         admit.
