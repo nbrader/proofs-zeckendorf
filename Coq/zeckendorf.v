@@ -1457,20 +1457,45 @@ Proof.
           (* i.e., sum xs < fib(k-1) *)
 
           (* Show that all elements in xs have indices at most k-2 *)
-          (* This means max xs <= fib(k-2) *)
+          (* Key insight: fib(k-1) is NOT in l, and fib k is the max, so elements in xs
+             must be strictly less than fib k and not equal to fib(k-1) *)
 
-          assert (Hxs_bounded: forall z, In z (y :: ys) -> exists i, i <= S k''' /\ fib i = z).
+          assert (Hxs_bounded: forall z, In z (y :: ys) -> exists i, i <= (S (S (S k''')) - 2) /\ fib i = z).
           { intros z Hz.
             (* z is in l = fib k :: y :: ys *)
             assert (Hz_in_l: In z (fib (S (S (S k'''))) :: y :: ys)).
             { simpl. right. exact Hz. }
             (* z is a Fibonacci number *)
             destruct (Hfib z Hz_in_l) as [i Heq_i].
-            exists i. split.
-            - (* Show i <= k - 1 = S (S k''') *)
-              (* z <= max l = fib k by list_max property *)
-              admit.
-            - exact Heq_i. }
+
+            (* Show z < fib k and z <> fib(k-1) *)
+            assert (Hz_lt: z < fib (S (S (S k''')))).
+            { (* z is in xs, not the head, and fib k is max *)
+              (* So z <= fib k, and z <> fib k (since subst x put fib k at head) *)
+              assert (Hz_le: z <= fib (S (S (S k''')))).
+              { apply (in_list_le_max z (fib (S (S (S k'''))) :: y :: ys) (fib (S (S (S k''')))) ).
+                - simpl. right. exact Hz.
+                - exact Hmax. }
+              assert (Hz_ne: z <> fib (S (S (S k''')))).
+              { intro Heq_z.
+                (* If z = fib k, then fib k appears twice in l, contradicting NoDup *)
+                (* fib k is at head, and z = fib k is in tail, contradicting NoDup *)
+                inversion Hnodup as [| ? ? Hnot_in_tail Hnodup_tail].
+                apply Hnot_in_tail. rewrite Heq_z in Hz. exact Hz. }
+              lia. }
+
+            assert (Hz_ne_km1: z <> fib (S (S k'''))).
+            { intro Heq_z.
+              apply Hk_minus_1_not_in.
+              rewrite <- Heq_z.
+              simpl. right. exact Hz. }
+
+            (* Now use fib_index_bound lemma *)
+            apply (fib_index_bound z (S (S (S k''')))).
+            - lia. (* k >= 3 *)
+            - exists i. exact Heq_i.
+            - exact Hz_lt.
+            - exact Hz_ne_km1. }
 
           (* This is getting complex - need more helper lemmas *)
           admit.
