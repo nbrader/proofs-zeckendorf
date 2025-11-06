@@ -654,6 +654,34 @@ Proof.
       * intros y Hy i j Hfi Hfj.
         apply (Hcompat y (or_intror Hy) i j Hfi Hfj).
 Qed.
+
+(* Helper lemma: if no_consecutive_fibs l, and fib i and fib j are both in l with consecutive indices, contradiction *)
+Lemma no_consecutive_both_in : forall l i j,
+  no_consecutive_fibs l ->
+  In (fib i) l ->
+  In (fib j) l ->
+  nat_consecutive i j ->
+  False.
+Proof.
+  induction l as [|x xs IH]; intros i j Hnocons Hi Hj Hcons.
+  - (* l = [] *) simpl in Hi. contradiction.
+  - (* l = x :: xs *)
+    simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+    simpl in Hi, Hj.
+    destruct Hi as [Hxi | Hxsi]; destruct Hj as [Hxj | Hxsj].
+    + (* Both equal x: fib i = x = fib j *)
+      (* This means fib i = fib j, but i and j are consecutive, so i ≠ j *)
+      (* For i ≠ j and i,j consecutive, fib i ≠ fib j except for i=1,j=2 *)
+      admit. (* Need fib injectivity or case analysis *)
+    + (* fib i = x, fib j in xs *)
+      apply (Hhead (fib j) Hxsj i j); auto.
+    + (* fib i in xs, fib j = x *)
+      apply (Hhead (fib i) Hxsi j i); auto.
+      unfold nat_consecutive in *. lia.
+    + (* Both in xs *)
+      apply (IH i j Htail Hxsi Hxsj Hcons).
+Admitted.
+
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
@@ -1310,11 +1338,15 @@ Proof.
                    exfalso. apply Hhead.
                    unfold nat_consecutive. right. reflexivity.
                 -- (* Both 0 and 1 are in zs *)
-                   (* Use Htail to show no_consecutive_fibs zs, then apply similar reasoning *)
-                   (* This is getting complex, let me simplify *)
-                   (* Actually, we can use a general property: if both 0 and 1 are in a list with no_consecutive_fibs, contradiction *)
-                   (* Let's prove this as a helper *)
-                   admit.
+                   (* Use no_consecutive_both_in lemma *)
+                   exfalso.
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   apply (no_consecutive_both_in zs 0 1).
+                   ** exact Htail.
+                   ** rewrite Hfib0. exact Hin_zs0.
+                   ** rewrite Hfib1. exact Hin_zs1.
+                   ** unfold nat_consecutive. left. reflexivity.
           - (* i = 1: fib 1 = 1, so y = 1 *)
             assert (H1: fib 1 = 1) by reflexivity.
             rewrite H1 in Heq_i. symmetry. exact Heq_i.
@@ -1423,9 +1455,11 @@ Proof.
             apply (Hhead (S (S k''')) (S (S (S k''')))); [| reflexivity | exact Hcons].
             symmetry. exact Hx_k_minus_1.
           * (* Both in xs - use tail property *)
-            (* This requires a general lemma about no_consecutive_fibs *)
-            (* For now, we can admit this subcase *)
-            admit.
+            (* Both fib k and fib(k-1) are in xs, but they're consecutive Fibonacci numbers *)
+            (* This contradicts no_consecutive_fibs xs *)
+            exfalso.
+            apply (no_consecutive_both_in xs (S (S (S k'''))) (S (S k'''))); [exact Htail | exact Hxs_k | exact Hxs_k_minus_1 |].
+            unfold nat_consecutive. right. reflexivity.
     }
 
     (* Now split cases: is l just [fib k], or does it have other elements? *)
