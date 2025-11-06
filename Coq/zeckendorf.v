@@ -1116,6 +1116,46 @@ Qed.
 
 (*
   ==============================================================================
+  HELPER LEMMAS FOR UNIQUENESS PROOF
+  ==============================================================================
+*)
+
+(* Helper: If an element is in a list with max = fib k, it's at most fib k *)
+Lemma in_list_le_fib_max : forall l k z,
+  list_max l = Some (fib k) ->
+  In z l ->
+  z <= fib k.
+Proof.
+  intros l k z Hmax Hz.
+  apply (in_list_le_max z l (fib k)); assumption.
+Qed.
+
+(* Helper: If z is a Fibonacci number with z <= fib k and z <> fib(k-1),
+   then the index of z is at most k-2 (for k >= 3) *)
+Lemma fib_index_bound : forall z k,
+  k >= 3 ->
+  (exists i, fib i = z) ->
+  z <= fib k ->
+  z <> fib (k - 1) ->
+  exists i, i <= k - 2 /\ fib i = z.
+Proof.
+  intros z k Hk_ge [i Heq_i] Hz_le Hz_neq.
+  exists i. split.
+  - (* Show i <= k - 2 *)
+    (* z = fib i <= fib k, so i <= k by monotonicity *)
+    (* z <> fib(k-1), so if i = k-1, then fib i = fib(k-1) = z, contradiction *)
+    destruct (Nat.eq_dec i (k - 1)) as [Heq | Hneq].
+    + (* i = k - 1 *)
+      exfalso. apply Hz_neq. rewrite <- Heq_i. f_equal. exact Heq.
+    + (* i <> k - 1 *)
+      (* Need to show i <= k - 2 *)
+      (* We know fib i = z <= fib k *)
+      admit.
+  - exact Heq_i.
+Admitted.
+
+(*
+  ==============================================================================
   KEY LEMMA FOR UNIQUENESS
   ==============================================================================
 *)
