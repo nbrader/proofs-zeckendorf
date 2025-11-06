@@ -826,6 +826,167 @@ Proof.
 Qed.
 
 (*
+  ==============================================================================
+  SORTED OUTPUT VERSION
+  ==============================================================================
+*)
+
+(*
+  The greedy algorithm as written produces output in ASCENDING order:
+  - It selects the largest Fibonacci <= n
+  - But prepends to accumulator: x :: acc
+  - Since n decreases, elements added are: large, smaller, smaller...
+  - Prepending reverses order: smallest ... larger ... largest
+
+  For our sorted list proofs (which use DESCENDING order), we reverse:
+*)
+
+(* Predicate: list is sorted in ascending order (strictly increasing) *)
+Fixpoint Sorted_asc (l : list nat) : Prop :=
+  match l with
+  | [] => True
+  | [_] => True
+  | x :: (y :: _) as xs => x < y /\ Sorted_asc xs
+  end.
+
+(* Descending sorted version of zeckendorf (for use with Sorted_dec proofs) *)
+Definition zeckendorf_sorted (n : nat) : list nat :=
+  rev (zeckendorf n []).
+
+(* Helper lemmas for sorted lists and append *)
+
+(* Sorted_dec list with single element appended *)
+Lemma sorted_dec_app_singleton : forall l x,
+  Sorted_dec l ->
+  (forall y, In y l -> y > x) ->
+  Sorted_dec (l ++ [x]).
+Proof.
+  induction l as [|z zs IH]; intros x Hsorted Hall_gt.
+  - (* l = [] *)
+    simpl. auto.
+  - (* l = z :: zs *)
+    destruct zs as [|w ws].
+    + (* zs = [] *)
+      simpl. split; [apply Hall_gt; simpl; left; reflexivity | auto].
+    + (* zs = w :: ws *)
+      simpl in Hsorted. destruct Hsorted as [Hzw Htail].
+      simpl (z :: w :: ws ++ [x]).
+      split.
+      * exact Hzw.
+      * apply IH.
+        -- exact Htail.
+        -- intros y Hy. apply Hall_gt. simpl. right. exact Hy.
+Qed.
+
+(* Helper: last element of ascending sorted list is largest *)
+Lemma sorted_asc_last_max : forall x xs y,
+  Sorted_asc (x :: xs ++ [y]) ->
+  forall z, In z (x :: xs) -> z < y.
+Proof.
+  intros x xs. revert x. induction xs as [|w ws IH]; intros x y Hsorted z Hz.
+  - (* xs = [] *)
+    simpl in Hsorted, Hz. destruct Hsorted as [Hxy _].
+    destruct Hz as [Heq | Hfalse].
+    + subst. exact Hxy.
+    + contradiction.
+  - (* xs = w :: ws *)
+    simpl in Hz. destruct Hz as [Heq | Hin].
+    + (* z = x *)
+      subst z.
+      simpl in Hsorted. destruct Hsorted as [Hxw Hrest].
+      assert (Hwy: w < y).
+      { apply (IH w y Hrest w). simpl. left. reflexivity. }
+      lia.
+    + (* z in w :: ws *)
+      simpl in Hsorted. destruct Hsorted as [_ Hrest].
+      apply (IH w y Hrest z Hin).
+Qed.
+
+(* Helper: Reversal interchanges ascending and descending sorted *)
+Lemma rev_sorted_asc_dec : forall l,
+  Sorted_asc l <-> Sorted_dec (rev l).
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    simpl. split; intro; auto.
+  - (* l = x :: xs *)
+    split; intro H.
+    + (* Sorted_asc (x :: xs) -> Sorted_dec (rev (x :: xs)) *)
+      simpl (rev (x :: xs)).
+      destruct xs as [|y ys].
+      * (* xs = [] *)
+        simpl. auto.
+      * (* xs = y :: ys *)
+        simpl in H. destruct H as [Hxy Hrest].
+        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
+        (* Need: Sorted_dec (rev (y :: ys) ++ [x]) *)
+        apply sorted_dec_app_singleton.
+        -- (* Sorted_dec (rev (y :: ys)) *)
+           apply IH. exact Hrest.
+        -- (* All elements in rev (y :: ys) are > x *)
+           intros z Hz.
+           (* z is in rev (y :: ys), so z is in y :: ys *)
+           apply in_rev in Hz.
+           (* We need to show x < z *)
+           (* Since Sorted_asc (x :: y :: ys), we have x < y and Sorted_asc (y :: ys) *)
+           (* And z is in y :: ys *)
+           (* Since x < y and y is the first element, and the list is ascending, *)
+           (* all elements >= y, so x < y <= z, thus x < z *)
+           simpl in Hz. destruct Hz as [Heq | Hin].
+           ++ (* z = y *)
+              subst. exact Hxy.
+           ++ (* z in ys *)
+              (* From Sorted_asc (y :: ys), we have y < ... < z *)
+              (* Combined with x < y, we get x < z *)
+              assert (Hy_lt_z: y < z).
+              { (* TODO: Need to extract this from Sorted_asc (y :: ys) and In z ys *)
+                admit. }
+              lia.
+    + (* Sorted_dec (rev (x :: xs)) -> Sorted_asc (x :: xs) *)
+      (* TODO: This direction is less critical for our purposes - we mainly need *)
+      (* to prove that zeckendorf produces Sorted_asc, then convert via forward direction *)
+      admit.
+Admitted.  (* TODO: Complete the reverse direction when needed *)
+
+(*
+  Key theorem: zeckendorf produces sorted output in ascending order
+
+  This theorem states that the greedy algorithm naturally produces an
+  ascending sorted list (smallest to largest Fibonacci numbers).
+
+  Combined with rev_sorted_asc_dec, this means zeckendorf_sorted produces
+  descending sorted output suitable for use with our Sorted_dec proofs.
+*)
+Lemma zeckendorf_produces_sorted_asc : forall n acc,
+  Sorted_asc acc ->
+  (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x) ->
+  Sorted_asc (zeckendorf n acc).
+Proof.
+  (* TODO: Prove that greedy algorithm maintains ascending sorted order *)
+  (* Key insight: since we always prepend larger elements, and process *)
+  (* n in decreasing order, the prepends build up an ascending list *)
+  admit.
+Admitted.
+
+(*
+  Corollary: zeckendorf_sorted produces descending sorted output
+
+  Once we prove zeckendorf_produces_sorted_asc, this follows immediately.
+*)
+Lemma zeckendorf_sorted_produces_sorted_dec : forall n,
+  Sorted_dec (zeckendorf_sorted n).
+Proof.
+  intro n.
+  unfold zeckendorf_sorted.
+  apply rev_sorted_asc_dec.
+  apply (zeckendorf_produces_sorted_asc n []).
+  - (* Empty list is sorted *)
+    simpl. auto.
+  - (* acc = [] satisfies the condition *)
+    left. reflexivity.
+Admitted.  (* TODO: Relies on zeckendorf_produces_sorted_asc being proved *)
+
+(*
   Helper lemma: fuel-based version of non-consecutive property
 
   This lemma states that zeckendorf_fuel preserves the non-consecutive property:
@@ -1338,6 +1499,183 @@ Qed.
 *)
 
 (*
+  Helper lemma: Fibonacci gap property
+
+  If y is a Fibonacci number with y < fib k and y ≠ fib(k-1), then y ≤ fib(k-2).
+  This is because the only Fibonacci numbers between fib(k-2) and fib k are
+  fib(k-1) (and possibly fib k itself).
+*)
+Lemma fib_gap_property : forall k y,
+  k >= 3 ->
+  (exists i, fib i = y) ->
+  y < fib k ->
+  y <> fib (k - 1) ->
+  y <= fib (k - 2).
+Proof.
+  intros k y Hk_ge [i Heq_i] Hy_lt Hy_neq.
+  subst y.
+  (* fib i < fib k, so i < k by monotonicity *)
+  (* fib i ≠ fib(k-1), so i ≠ k-1 *)
+  (* Therefore i <= k-2 *)
+
+  (* First show i < k *)
+  assert (Hi_lt_k: i < k).
+  { destruct (Nat.lt_ge_cases i k) as [Hlt | Hge]; [exact Hlt |].
+    exfalso.
+    (* If i >= k, then fib i >= fib k *)
+    assert (Hfib_ge: fib k <= fib i).
+    { destruct (Nat.eq_dec i k) as [Heq | Hneq].
+      - rewrite Heq. lia.
+      - assert (Hi_gt_k: i > k) by lia.
+        destruct i as [|[|i']]; try lia.
+        destruct k as [|[|k']]; try lia.
+        apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+    lia. }
+
+  (* Now show i ≠ k - 1 *)
+  assert (Hi_neq: i <> k - 1).
+  { intro Heq. apply Hy_neq. rewrite Heq. reflexivity. }
+
+  (* Therefore i <= k - 2 *)
+  assert (Hi_le: i <= k - 2) by lia.
+
+  (* Now show fib i <= fib(k-2) *)
+  destruct (Nat.eq_dec i (k - 2)) as [Heq | Hneq].
+  - (* i = k - 2: fib i = fib(k-2) *)
+    rewrite Heq. lia.
+  - (* i < k - 2 *)
+    assert (Hi_lt: i < k - 2) by lia.
+    (* k >= 3, so k - 2 >= 1 *)
+    assert (Hk_minus_2_ge: k - 2 >= 1) by lia.
+    destruct i as [|[|i']].
+    + (* i = 0: fib 0 = 0 <= fib(k-2) *)
+      assert (Hpos: fib (k - 2) > 0).
+      { apply fib_pos. exact Hk_minus_2_ge. }
+      simpl. lia.
+    + (* i = 1: fib 1 = 1 <= fib(k-2) *)
+      (* We have i < k-2, so 1 < k-2, thus k-2 >= 2 *)
+      assert (Hk_minus_2_ge_2: k - 2 >= 2) by lia.
+      (* fib 1 = 1, fib 2 = 1, and fib is monotonic for indices >= 2 *)
+      (* So fib(k-2) >= fib 2 = 1 *)
+      assert (Hfib_k_minus_2_ge: fib (k - 2) >= fib 2).
+      { destruct (Nat.eq_dec (k - 2) 2) as [Heq2 | Hneq2].
+        - rewrite Heq2. lia.
+        - assert (Hk_gt: k - 2 > 2) by lia.
+          apply Nat.lt_le_incl.
+          apply fib_mono_lt; lia. }
+      assert (Hfib2: fib 2 = 1) by reflexivity.
+      simpl. lia.
+    + (* i >= 2: use monotonicity *)
+      apply Nat.lt_le_incl.
+      apply fib_mono_lt; lia.
+Qed.
+
+(*
+  Helper lemma: In a sorted descending list of Fibonacci numbers where
+  adjacent pairs are non-consecutive, if a Fibonacci number fib j is anywhere
+  in the tail and fib i is the head with i and j consecutive, then we have
+  a contradiction.
+
+  This is a key property: in sorted Fibonacci lists, consecutive indices
+  must be adjacent in the list (because Fibonacci grows and there are no
+  numbers in between).
+*)
+Lemma sorted_fibs_no_consecutive_gap : forall i j y ys,
+  i >= 2 -> j >= 2 ->
+  nat_consecutive i j ->
+  i > j ->
+  Sorted_dec (fib i :: y :: ys) ->
+  In (fib j) (y :: ys) ->
+  (forall z, In z (fib i :: y :: ys) -> exists k, fib k = z) ->
+  no_consecutive_fibs_sorted (fib i :: y :: ys) ->
+  False.
+Proof.
+  intros i j y ys Hi_ge Hj_ge Hcons Hi_gt_j Hsorted Hj_in Hfib Hnocons.
+  (* Since i and j are consecutive with i > j, we have i = S j *)
+  unfold nat_consecutive in Hcons.
+  destruct Hcons as [Hi_eq | Hj_eq].
+  - (* i = S j, which matches i > j *)
+    (* fib i > fib j by monotonicity *)
+    assert (Hfib_i_gt_j: fib i > fib j).
+    { apply fib_mono_lt; lia. }
+
+    (* In the sorted list fib i :: y :: ys, fib j is somewhere in y :: ys *)
+    (* If fib j = y, then they're adjacent -> contradiction from Hnocons *)
+    simpl in Hj_in. destruct Hj_in as [Hy_eq | Hys_in].
+    + (* y = fib j, so fib i and fib j are adjacent *)
+      simpl in Hnocons. destruct Hnocons as [Hno_adj _].
+      apply (Hno_adj i j); try reflexivity.
+      * rewrite Hy_eq. reflexivity.
+      * unfold nat_consecutive. left. exact Hi_eq.
+    + (* fib j is in ys, not adjacent to fib i *)
+      (* But this means there exists y with fib i > y > fib j *)
+      (* and y is a Fibonacci number *)
+      assert (Hy_fib: exists k, fib k = y).
+      { apply Hfib. simpl. right. left. reflexivity. }
+      destruct Hy_fib as [k Heq_k].
+
+      (* y is between fib i and fib j *)
+      (* First show: fib j < y *)
+      assert (Hfib_j_lt_y: fib j < y).
+      { assert (Hsorted_y_ys: Sorted_dec (y :: ys)).
+        { eapply sorted_tail. exact Hsorted. }
+        destruct ys as [|z zs].
+        - simpl in Hys_in. contradiction.
+        - simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [Hy_gt_z _].
+          simpl in Hys_in. destruct Hys_in as [Hz_eq | Hzs_in].
+          + (* z = fib j *)
+            rewrite <- Hz_eq. exact Hy_gt_z.
+          + (* fib j is deeper *)
+            eapply sorted_tail_lt.
+            * eapply (sorted_tail (fib i)). exact Hsorted.
+            * simpl. right. exact Hzs_in. }
+
+      (* Next show: y < fib i *)
+      assert (Hy_lt_fib_i: y < fib i).
+      { eapply sorted_tail_lt.
+        - exact Hsorted.
+        - simpl. left. reflexivity. }
+
+      (* So fib j < y = fib k < fib i *)
+      assert (Hy_bounds: fib j < fib k /\ fib k < fib i).
+      { rewrite <- Heq_k in Hfib_j_lt_y, Hy_lt_fib_i.
+        split; assumption. }
+
+      (* So fib j < fib k < fib i *)
+      (* This means j < k < i by monotonicity *)
+      assert (Hj_lt_k: j < k).
+      { destruct (Nat.lt_ge_cases j k) as [Hlt | Hge]; [exact Hlt |].
+        exfalso.
+        assert (Hfib_ge: fib k <= fib j).
+        { destruct (Nat.eq_dec k j) as [Heq | Hneq].
+          - rewrite Heq. lia.
+          - assert (Hk_gt_j: k > j) by lia.
+            apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+        lia. }
+
+      assert (Hk_lt_i: k < i).
+      { destruct (Nat.lt_ge_cases k i) as [Hlt | Hge]; [exact Hlt |].
+        exfalso.
+        assert (Hfib_ge: fib i <= fib k).
+        { destruct (Nat.eq_dec i k) as [Heq | Hneq].
+          - rewrite Heq. lia.
+          - assert (Hi_gt_k: i > k) by lia.
+            apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+        lia. }
+
+      (* So j < k < i, but i = S j *)
+      (* We have j < k < i and i = S j *)
+      (* This means j < k < S j, so k must be between j and S j *)
+      (* But there are no naturals strictly between j and S j *)
+      (* TODO: lia is having trouble with this - need to make Hi_eq more visible *)
+      admit.
+  - (* j = S i, but i > j, contradiction *)
+    (* If j = S i and i > j, then S i > i, which is impossible *)
+    (* TODO: lia isn't seeing Hj_eq in scope *)
+    admit.
+Admitted.  (* TODO: Complete this proof - the logic is sound but Coq needs help with the arithmetic *)
+
+(*
   Sum bound for sorted non-consecutive Fibonacci lists (SIMPLIFIED VERSION)
 
   This is a dramatically simplified version that works with sorted lists.
@@ -1500,6 +1838,25 @@ Proof.
 
         (* Since y is a Fibonacci number, y < fib k, and y <> fib (k-1),
            by monotonicity, y <= fib (k-2) *)
+
+        (* First, assert y is a Fibonacci number *)
+        assert (Hy_fib: exists i, fib i = y).
+        { apply Hfib. simpl. right. left. reflexivity. }
+
+        (* Assert y <> fib (k-1) from Hk_minus_1_not_in *)
+        assert (Hy_neq_k_minus_1: y <> fib (S (S k'''))).
+        { intro Heq. apply Hk_minus_1_not_in. rewrite <- Heq. simpl. left. reflexivity. }
+
+        (* Use fib_gap_property *)
+        assert (Hy_le_k_minus_2: y <= fib (S (S k''') - 1)).
+        { apply (fib_gap_property (S (S (S k'''))) y).
+          - lia.
+          - exact Hy_fib.
+          - exact Hy_lt_k.
+          - simpl. exact Hy_neq_k_minus_1. }
+
+        (* Now we need to apply IH to y :: ys to show sum_list (y :: ys) < fib(k-1) *)
+        (* TODO: Complete the IH application *)
         admit.
 Admitted.
 
