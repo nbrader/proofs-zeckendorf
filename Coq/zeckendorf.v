@@ -613,6 +613,66 @@ Definition nat_consecutive (k1 k2 : nat) : Prop :=
   k2 = S k1 \/ k1 = S k2.
 
 (*
+  ==============================================================================
+  SORTED LIST INFRASTRUCTURE
+  ==============================================================================
+
+  To simplify proofs about Zeckendorf representations, we work with sorted lists
+  in descending order. This eliminates case analysis about element positions and
+  makes finding the maximum element trivial.
+*)
+
+(* Predicate: list is sorted in descending order (strictly decreasing) *)
+Fixpoint Sorted_dec (l : list nat) : Prop :=
+  match l with
+  | [] => True
+  | [_] => True
+  | x :: (y :: _) as xs => x > y /\ Sorted_dec xs
+  end.
+
+(* For a descending sorted list, the head is the maximum *)
+Lemma sorted_head_max : forall x xs,
+  Sorted_dec (x :: xs) ->
+  forall y, In y xs -> x > y.
+Proof.
+  intros x xs. revert x. induction xs as [|z zs IH]; intros x Hsorted y Hy.
+  - simpl in Hy. contradiction.
+  - simpl in Hsorted. destruct Hsorted as [Hxz Htail].
+    simpl in Hy. destruct Hy as [Heq | Hin].
+    + subst. exact Hxz.
+    + assert (Hzy: z > y) by (apply (IH z Htail y Hin)).
+      lia.
+Qed.
+
+(* Sorted lists are automatically NoDup *)
+Lemma sorted_NoDup : forall l,
+  Sorted_dec l -> NoDup l.
+Proof.
+  induction l as [|x xs IH]; intro Hsorted.
+  - constructor.
+  - constructor.
+    + intro Hin.
+      assert (Hgt: x > x).
+      { destruct xs as [|y ys].
+        - simpl in Hin. contradiction.
+        - apply (sorted_head_max x (y :: ys) Hsorted x Hin). }
+      lia.
+    + apply IH. destruct xs as [|y ys]; simpl in *; auto.
+      destruct Hsorted. auto.
+Qed.
+
+(* For sorted lists, max is simply the head element *)
+Definition sorted_max (l : list nat) : option nat :=
+  match l with
+  | [] => None
+  | x :: _ => Some x
+  end.
+
+(* Note: For sorted lists in descending order, sorted_max l simply returns the head.
+   This is equivalent to list_max l when the list is sorted, but much simpler to work with.
+   We will prove sorted_max_correct after list_max is defined later in the file. *)
+
+(*
   Helper predicate: A list contains no consecutive Fibonacci numbers
 
   This predicate ensures that for any two elements x, y in the list,
