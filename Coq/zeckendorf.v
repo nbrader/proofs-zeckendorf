@@ -1504,14 +1504,13 @@ Proof.
 
           (* First, extract the max of xs *)
           assert (Hxs_nonempty: exists m, list_max (y :: ys) = Some m).
-          { exists (Nat.max y (fold_right Nat.max 0 ys)).
-            admit. (* list_max of non-empty list exists *) }
+          { apply list_max_some. }
           destruct Hxs_nonempty as [max_xs Hmax_xs].
 
           (* Show max_xs is a Fibonacci number with index ≤ k-2 *)
           assert (Hmax_xs_fib: exists m, m <= S (S (S k''')) - 2 /\ fib m = max_xs /\ m >= 2).
           { assert (Hmax_xs_in: In max_xs (y :: ys)).
-            { admit. (* max is in the list *) }
+            { apply list_max_in. exact Hmax_xs. }
             destruct (Hxs_bounded max_xs Hmax_xs_in) as [m [Hm_bound Hm_eq]].
             (* Need to show m >= 2 *)
             exists m. split; [exact Hm_bound | split; [exact Hm_eq | admit]]. }
@@ -1521,20 +1520,34 @@ Proof.
           (* Apply IH to xs *)
           assert (Hxs_sum_bounded: sum_list (y :: ys) < fib (S m)).
           { apply (IHk m).
-            - (* m < k *) admit.
+            - (* m < k *)
+              (* From Hm_le: m <= k - 2, so m <= k - 2 < k *)
+              assert (Hkm2: S (S (S k''')) - 2 = S k''') by lia.
+              rewrite Hkm2 in Hm_le. lia.
             - (* m >= 2 *) exact Hm_ge.
-            - (* NoDup xs *) admit.
-            - (* no_consecutive_fibs xs *) admit.
-            - (* all elements are Fibs *) admit.
+            - (* NoDup xs *)
+              (* xs is tail of (fib k :: xs), so NoDup preserved *)
+              inversion Hnodup as [| ? ? ? Hnodup_tail]. exact Hnodup_tail.
+            - (* no_consecutive_fibs xs *)
+              (* Similar: tail of list with no_consecutive_fibs *)
+              simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
+            - (* all elements are Fibs *)
+              intros x Hx. apply Hfib. simpl. right. exact Hx.
             - (* list_max xs = Some (fib m) *)
               rewrite <- Hm_eq in Hmax_xs. exact Hmax_xs. }
 
           (* Show fib(S m) ≤ fib(S (S k''')) = fib(k-1) *)
           assert (Hm_lt_km1: fib (S m) <= fib (S (S k'''))).
-          { apply Nat.lt_le_incl. apply fib_mono_lt.
-            - admit. (* m >= 2 implies S m >= 2 *)
-            - admit. (* k-1 >= 2 *)
-            - admit. (* S m < S (S k''') from m ≤ k-2 *)
+          { (* From m <= k-2, we get S m <= k-1 = S (S k''') *)
+            assert (Hkm2: S (S (S k''')) - 2 = S k''') by lia.
+            rewrite Hkm2 in Hm_le.
+            (* So m <= S k''', which means S m <= S (S k''') *)
+            (* We need fib(S m) <= fib(k-1) *)
+            (* Case split: either S m = S (S k''') or S m < S (S k''') *)
+            destruct (Nat.eq_dec (S m) (S (S k'''))) as [Heq | Hneq].
+            - (* S m = S (S k''') *) rewrite Heq. lia.
+            - (* S m < S (S k''') *)
+              apply Nat.lt_le_incl. apply fib_mono_lt; try lia.
           }
 
           (* Combine to get final result *)
