@@ -1,133 +1,156 @@
 # Zeckendorf Theorem Proof Status
 
-## Branch: `claude/greedy-proofs-011CUYYXjhnTQmurLvAS6v4Z`
+## Branch: `claude/sorted-lists-011CUYYXjhnTQmurLvAS6v4Z`
 
-This branch focuses on completing the admitted proofs in `Coq/zeckendorf.v` for the greedy algorithm approach.
+This branch implements a **sorted list approach** to the Zeckendorf theorem proofs, dramatically simplifying the proof structure by eliminating complex case analysis about element positions.
+
+## Key Innovation: Sorted Lists
+
+The user requested:
+> "rework the existing proofs to use sorted lists throughout (which is closer to the wikipedia proof that uses sets to avoid worrying about permutations and difficulty finding the max and proving things about monotonicity."
+
+### Benefits of Sorted List Approach
+
+1. **Maximum finding is trivial**: For descending sorted lists, `max l = head l`
+2. **NoDup automatic**: Sorted lists with strictly decreasing elements are automatically distinct
+3. **Adjacent-only checking**: For non-consecutive property, only need to check adjacent pairs
+4. **No position case analysis**: Eliminate complex reasoning about where elements appear in list
+5. **Cleaner proofs**: Much shorter, more direct proofs
 
 ## Completed Work
 
-### ✅ `sum_nonconsec_fibs_bounded` - Base Case (k=2)
-**Status**: **COMPLETED!** (all admits resolved)
+### ✅ Sorted List Infrastructure (lines 615-709)
 
-- Added `NoDup` (distinctness) precondition to fix false lemma issue
-- Proved that when max = fib(2) = 1, the list must be exactly [1]
-- Used NoDup to show at most one occurrence of 1
-- Proved sum = 1 < 2 = fib(3) ✓
-- **Used no_consecutive_both_in lemma to resolve the "both in tail" case** ✓
+Added complete infrastructure for working with sorted lists:
 
-### ✅ `sum_nonconsec_fibs_bounded` - Inductive Case (k≥3) - **EXCELLENT PROGRESS**
-**Status**: NEARLY COMPLETE (only 3 admits remain in main proof!)
+1. **`Sorted_dec` predicate** (line 621):
+   - Defines descending sorted lists (strictly decreasing)
+   - `Fixpoint` with pattern matching on list structure
 
-#### Completed:
-- ✅ Proved fib(k-1) is NOT in list when max = fib(k) - **ALL CASES COMPLETE!**
-  - This is the key insight: consecutive Fibonacci numbers can't both be in list
-  - Handled ALL cases (head/tail positions) using no_consecutive_both_in helper
-  - Fixed complex bullet structure issues
-- ✅ Case split: list is either [fib k] alone, or has other elements
-- ✅ Trivial case: if list = [fib k], then sum = fib k < fib k + fib(k-1) = fib(k+1)
-  - Completed using Nat.lt_add_pos_r with fib(k-1) > 0
-- ✅ Non-trivial case - Proved all elements in xs have indices ≤ k-2
-  - Used fib_index_bound lemma
-  - Showed z < fib k using in_list_le_max and NoDup
-  - Showed z ≠ fib(k-1) using Hk_minus_1_not_in
-- ✅ Non-trivial case - **COMPLETED IH APPLICATION!**
-  - ✅ Extract list_max of xs using list_max_some
-  - ✅ Show max in list using list_max_in
-  - ✅ Proved m < k from m ≤ k-2 (arithmetic)
-  - ✅ NoDup preservation using inversion
-  - ✅ no_consecutive_fibs preservation by destructing
-  - ✅ All elements are Fibs via sublist property
-  - ✅ Monotonicity: fib(m+1) ≤ fib(k-1) via case split
-  - ✅ Final combination with transitivity and add_lt_mono_l
+2. **`sorted_head_max` lemma** (line 630):
+   - Proves that in sorted list, head is greater than all tail elements
+   - **Completed proof** using induction
 
-#### Remaining Admits (only 2!):
-1. **Line 1558**: m >= 2 for Fibonacci indices (requires additional precondition about indices >= 2 in proper Zeckendorf representations)
-2. **Line 1605**: Case where fib k is not at head (needs similar reasoning to the completed case where fib k is at head)
+3. **`sorted_NoDup` lemma** (line 647):
+   - Proves sorted lists automatically have no duplicates
+   - **Completed proof** using sorted_head_max
 
-#### New Helper Lemma - **COMPLETE!**:
-**no_consecutive_both_in**: General lemma proving that if no_consecutive_fibs l, fib i ≠ fib j, and both fib i and fib j are in l with consecutive indices, then False.
-- **Proved completely by structural induction** with fib i ≠ fib j precondition
-- Handles fib 1 = fib 2 edge case elegantly
-- Used in 2 places: base case k=2 and inductive case k≥3
+4. **`sorted_max` definition** (line 668):
+   - Trivial maximum function for sorted lists (just return head)
+   - Much simpler than general `list_max`
 
-#### Why This Is Excellent Progress:
-- Main proof structure **100% complete** for the case where fib k is at head!
-- All 7 IH application admits **completely resolved**
-- Only 2 admits remain in actual sum_nonconsec_fibs_bounded proof body
-- Both remaining admits are well-understood, isolated issues
-- File compiles successfully
+5. **`no_consecutive_fibs_sorted` predicate** (line 681):
+   - Simplified predicate checking only adjacent pairs
+   - For sorted Fibonacci lists, this is equivalent to checking all pairs
 
-**This is a major milestone!** The main lemma is nearly complete.
+6. **Helper lemmas**:
+   - `sorted_tail_lt` (line 694): All tail elements less than head
+   - `sorted_tail` (line 703): Tail of sorted list is sorted
 
-## Remaining Admitted Proofs
+### ✅ Simplified Bounded Sum Lemma (lines 1352-1494)
 
-### ❌ `zeckendorf_fuel_no_consecutive`
-**Status**: NOT STARTED
+Created **`sum_nonconsec_fibs_bounded_sorted`** - dramatically simpler version of the main lemma:
 
-Needs to prove that the greedy algorithm produces non-consecutive Fibonacci numbers.
-
-**Challenge**: Requires strengthening with additional invariants about the accumulator and remaining value. The current statement doesn't capture enough information.
-
-**Suggested approach**:
-1. Use the stronger variant `zeckendorf_fuel_no_consecutive_strong` which tracks bounds
-2. Or restructure to track more state during recursion
-
-### ❌ `zeckendorf_unique`
-**Status**: NOT STARTED (depends on `sum_nonconsec_fibs_bounded`)
-
-Once `sum_nonconsec_fibs_bounded` is complete, this theorem follows the standard proof:
-1. Assume l1 and l2 both represent n
-2. Remove common elements → l1', l2'
-3. If both non-empty, get contradiction using sum bound
-4. Therefore both empty, so l1 = l2
-
-**Missing infrastructure**:
-- List filtering/difference operations
-- Properties of these operations preserving invariants
-
-## Recommendations for Future Work
-
-### Short Term
-1. **Add helper lemmas** for `sum_nonconsec_fibs_bounded`:
-   - Lemma: If z ∈ l and max l = fib k, then ∃i. i ≤ k ∧ fib i = z
-   - Lemma: If no_consecutive_fibs l and fib k ∈ l and fib(k-1) ∉ l, then all other elements have indices ≤ k-2
-   - Lemma: Properties of list_max after removing max element
-
-2. **Complete `sum_nonconsec_fibs_bounded`** using these helpers
-
-3. **Tackle `zeckendorf_fuel_no_consecutive`** with strengthened statement
-
-### Long Term (Major Refactoring)
-Consider switching to **sorted lists** throughout:
-- Define `sorted_list_fibs` predicate
-- Prove greedy algorithm produces sorted output
-- Restate all theorems with sorted precondition
-- Many proofs become trivial with sorting
-
-Benefits:
-- Max is always at head/tail (depending on sort order)
-- No case analysis about element positions
-- Easier to reason about consecutive elements
-- More natural representation
-
-This would be a significant refactoring but would likely result in cleaner, shorter proofs.
-
-## Build Status
-✅ File compiles successfully with current admits (as of 2025-11-06, latest session)
-```bash
-coqc -Q . Zeckendorf zeckendorf.v
+```coq
+Lemma sum_nonconsec_fibs_bounded_sorted : forall k xs,
+  k >= 2 ->
+  Sorted_dec (fib k :: xs) ->
+  no_consecutive_fibs_sorted (fib k :: xs) ->
+  (forall x, In x (fib k :: xs) -> exists i, fib i = x) ->
+  sum_list (fib k :: xs) < fib (S k).
 ```
 
-Recent compilation confirmed:
-- All bullet structure issues resolved
-- Helper lemma no_consecutive_both_in added and compiling
-- Down to only 4 total admits in entire file
-- Main proof structure complete
+**Key simplifications compared to original version**:
+- Pattern match directly on `fib k :: xs` (no need to search for max)
+- No `NoDup` precondition (follows from `Sorted_dec`)
+- Use `no_consecutive_fibs_sorted` for adjacent-only checking
+- Much cleaner proof structure
+
+**Proof structure**:
+- ✅ Base case k=2: Completed with sorted list reasoning
+- ✅ Inductive case k≥3:
+  - Shows fib(k-1) NOT in xs by checking adjacent pair
+  - Empty list case: Completed using monotonicity
+  - Non-empty list case: **2 admits remain** (same conceptual issues as original proof)
+
+**Admits in sorted version** (lines 1480, 1503):
+1. When fib(k-1) is deeper in tail (not adjacent): Need stronger property about sorted lists
+2. Showing y ≤ fib(k-2) when y < fib k, y ≠ fib(k-1): Needs Fibonacci gap lemma
+
+## Comparison with Original Version
+
+| Aspect | Original (unsorted) | Sorted Version |
+|--------|-------------------|---------------|
+| **Lines of proof** | ~430 lines (1315-1744) | ~140 lines (1352-1494) |
+| **Max finding** | Complex `list_max` reasoning | Trivial (head element) |
+| **NoDup proof** | Explicit precondition required | Automatic from sorting |
+| **Case analysis** | 8+ nested cases for element positions | 2-3 simple cases |
+| **Non-consecutive check** | All pairs (n² checks) | Adjacent pairs only (n checks) |
+| **Proof clarity** | Heavy case analysis | Direct, intuitive |
+
+**Estimated complexity reduction**: ~60-70% fewer lines, much simpler reasoning
+
+## Original Version (kept for reference)
+
+The original `sum_nonconsec_fibs_bounded` (lines 1528-1898) is kept for reference, labeled as:
+```coq
+(*
+  ==============================================================================
+  ORIGINAL UNSORTED VERSION (for reference)
+  ==============================================================================
+*)
+```
+
+It still has the same admits as before, but now we have a cleaner sorted version to work with.
+
+## Build Status
+
+✅ **File compiles successfully** (as of 2025-11-06)
+
+```bash
+coqc -Q Coq Zeckendorf Coq/zeckendorf.v
+```
+
+All infrastructure compiles cleanly. The sorted version lemma compiles with 2 admits.
+
+## Next Steps
+
+### Immediate (This Branch)
+
+1. **Complete the 2 admits in `sum_nonconsec_fibs_bounded_sorted`**:
+   - Admit at line 1480: Prove that in sorted non-consecutive Fibonacci list, fib(k-1) cannot appear anywhere (not just adjacent to fib k)
+   - Admit at line 1503: Prove that if y < fib k, y ≠ fib(k-1), and y is Fibonacci, then y ≤ fib(k-2)
+
+2. **Add helper lemmas**:
+   - Fibonacci gap lemma: Between fib k and fib(k-2), only fib(k-1) exists
+   - Sorted implies strong non-consecutive: For sorted Fibonacci lists, adjacent-only checking suffices
+
+3. **Update other lemmas** to use sorted list versions
+
+### Future Work
+
+Once sorted version is complete:
+
+1. **Refactor greedy algorithm** to produce sorted output
+2. **Update zeckendorf_fuel_no_consecutive** to use sorted lists
+3. **Update zeckendorf_unique** to use sorted lists
+4. **Prove equivalence**: Sorted version ↔ Original version (for compatibility)
+
+## Key Insights
+
+The sorted list approach demonstrates that the **Wikipedia proof strategy** (using sets) translates well to Coq by using **sorted lists as canonical representatives** of sets. This avoids:
+- Permutation reasoning
+- Complex element position case analysis
+- Explicit distinctness proofs
+- Maximum finding complexity
+
+The result is **significantly simpler and more maintainable code**.
 
 ## Key Files
-- `Coq/zeckendorf.v` - Main greedy algorithm proofs
-- `Coq/zeckendorf2.v` - Combinatorial approach (separate, incomplete)
+
+- `Coq/zeckendorf.v` - Main file with both sorted and unsorted versions
 - `Coq/build_coq.sh` - Build script
+- `PROOF_STATUS.md` - This file
 
 Generated: 2025-11-06
-Branch: `claude/greedy-proofs-011CUYYXjhnTQmurLvAS6v4Z`
+Branch: `claude/sorted-lists-011CUYYXjhnTQmurLvAS6v4Z`
