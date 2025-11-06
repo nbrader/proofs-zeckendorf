@@ -1130,29 +1130,46 @@ Proof.
   apply (in_list_le_max z l (fib k)); assumption.
 Qed.
 
-(* Helper: If z is a Fibonacci number with z <= fib k and z <> fib(k-1),
+(* Helper: If z is a Fibonacci number with z < fib k and z <> fib(k-1),
    then the index of z is at most k-2 (for k >= 3) *)
 Lemma fib_index_bound : forall z k,
   k >= 3 ->
   (exists i, fib i = z) ->
-  z <= fib k ->
+  z < fib k ->
   z <> fib (k - 1) ->
   exists i, i <= k - 2 /\ fib i = z.
 Proof.
-  intros z k Hk_ge [i Heq_i] Hz_le Hz_neq.
+  intros z k Hk_ge [i Heq_i] Hz_lt Hz_neq.
   exists i. split.
   - (* Show i <= k - 2 *)
-    (* z = fib i <= fib k, so i <= k by monotonicity *)
-    (* z <> fib(k-1), so if i = k-1, then fib i = fib(k-1) = z, contradiction *)
-    destruct (Nat.eq_dec i (k - 1)) as [Heq | Hneq].
-    + (* i = k - 1 *)
-      exfalso. apply Hz_neq. rewrite <- Heq_i. f_equal. exact Heq.
-    + (* i <> k - 1 *)
-      (* Need to show i <= k - 2 *)
-      (* We know fib i = z <= fib k *)
-      admit.
+    (* z = fib i < fib k, so i < k by strict monotonicity *)
+    (* z <> fib(k-1), so i <> k-1 *)
+    (* Therefore i <= k - 2 *)
+
+    (* First show i < k *)
+    assert (Hi_lt_k: i < k).
+    { (* By contradiction: if i >= k, then fib i >= fib k by monotonicity *)
+      destruct (Nat.lt_ge_cases i k) as [Hlt | Hge]; [exact Hlt |].
+      exfalso.
+      assert (Hfib_ge: fib k <= fib i).
+      { (* Need to show fib k <= fib i when k <= i and both >= 2 *)
+        destruct (Nat.eq_dec k i) as [Heq_ki | Hneq_ki].
+        - (* k = i: fib k = fib i *)
+          rewrite Heq_ki. lia.
+        - (* k < i: use fib_mono_lt *)
+          assert (Hk_lt_i: k < i) by lia.
+          apply Nat.lt_le_incl.
+          apply fib_mono_lt; try lia. }
+      rewrite Heq_i in Hfib_ge. lia. }
+
+    (* Now show i <> k - 1 *)
+    assert (Hi_neq: i <> k - 1).
+    { intro Heq. apply Hz_neq. rewrite <- Heq_i. f_equal. exact Heq. }
+
+    (* Combine: i < k and i <> k - 1, so i <= k - 2 *)
+    lia.
   - exact Heq_i.
-Admitted.
+Qed.
 
 (*
   ==============================================================================
@@ -1381,23 +1398,30 @@ Proof.
               assert (Hmono: fib (S (S k''')) < fib (S (S (S k''')))).
               { apply fib_mono_lt; lia. }
               lia. }
-            subst x.
-            exfalso. apply Hfib_inj. reflexivity.
+            (* From Hx_k and Hx_k_minus_1, we have fib k = x = fib(k-1) *)
+            exfalso. apply Hfib_inj.
+            transitivity x; [symmetry; exact Hx_k | exact Hx_k_minus_1].
           * (* fib(k-1) is in xs, x = fib k *)
             (* By Hhead: fib k and fib(k-1) are not consecutive, contradiction *)
+            exfalso.
             specialize (Hhead (fib (S (S k'''))) Hxs_k_minus_1).
             assert (Hcons: nat_consecutive (S (S (S k'''))) (S (S k'''))).
             { unfold nat_consecutive. right. reflexivity. }
-            apply (Hhead (S (S (S k'''))) (S (S k'''))); try reflexivity.
-            exact Hcons.
+            (* Hhead: fib i = x -> fib j = fib(k-1) -> ~nat_consecutive i j *)
+            (* We have x = fib k, so we apply with i = k, j = k-1 *)
+            apply (Hhead (S (S (S k'''))) (S (S k'''))); [| reflexivity | exact Hcons].
+            symmetry. exact Hx_k.
         + (* fib k is in xs *)
           destruct Hin_k_minus_1 as [Hx_k_minus_1 | Hxs_k_minus_1].
           * (* x = fib(k-1), fib k is in xs *)
+            exfalso.
             specialize (Hhead (fib (S (S (S k''')))) Hxs_k).
             assert (Hcons: nat_consecutive (S (S k''')) (S (S (S k''')))).
             { unfold nat_consecutive. left. reflexivity. }
-            apply (Hhead (S (S k''')) (S (S (S k''')))); try reflexivity.
-            exact Hcons.
+            (* Hhead: fib i = x -> fib j = fib k -> ~nat_consecutive i j *)
+            (* We have x = fib(k-1), so we apply with i = k-1, j = k *)
+            apply (Hhead (S (S k''')) (S (S (S k''')))); [| reflexivity | exact Hcons].
+            symmetry. exact Hx_k_minus_1.
           * (* Both in xs - use tail property *)
             (* This requires a general lemma about no_consecutive_fibs *)
             (* For now, we can admit this subcase *)
@@ -1410,18 +1434,23 @@ Proof.
 
     (* Case analysis on whether l = [fib k] or has other elements *)
     destruct l as [|x xs].
-    - (* l = []: contradicts max = Some ... *)
+    * (* l = []: contradicts max = Some ... *)
       simpl in Hmax. discriminate.
-    - (* l = x :: xs *)
+    * (* l = x :: xs *)
       simpl in Hfib_k_in.
       destruct Hfib_k_in as [Hx_k | Hxs_k].
-      + (* x = fib k *)
+      -- (* x = fib k *)
         subst x.
         (* Now check if xs is empty *)
         destruct xs as [|y ys].
-        * (* xs = [], so l = [fib k] *)
-          simpl. lia.
-        * (* xs = y :: ys, so l has other elements *)
+        ++ (* xs = [], so l = [fib k] *)
+          (* sum [fib k] = fib k < fib k + fib(k-1) since fib(k-1) > 0 *)
+          unfold sum_list. simpl. rewrite Nat.add_0_r.
+          (* Now goal is: fib k < fib k + fib(k-1) *)
+          assert (Hfib_pos: fib (S (S k''')) > 0).
+          { apply fib_pos. lia. }
+          apply Nat.lt_add_pos_r. exact Hfib_pos.
+        ++ (* xs = y :: ys, so l has other elements *)
           (* sum l = fib k + sum xs *)
           simpl.
           (* Need: fib k + sum xs < fib k + fib(k-1) *)
@@ -1445,7 +1474,7 @@ Proof.
 
           (* This is getting complex - need more helper lemmas *)
           admit.
-      + (* fib k is in xs, not at head *)
+      -- (* fib k is in xs, not at head *)
         (* Similar reasoning but more complex *)
         admit.
 Admitted.
