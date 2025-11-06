@@ -826,6 +826,167 @@ Proof.
 Qed.
 
 (*
+  ==============================================================================
+  SORTED OUTPUT VERSION
+  ==============================================================================
+*)
+
+(*
+  The greedy algorithm as written produces output in ASCENDING order:
+  - It selects the largest Fibonacci <= n
+  - But prepends to accumulator: x :: acc
+  - Since n decreases, elements added are: large, smaller, smaller...
+  - Prepending reverses order: smallest ... larger ... largest
+
+  For our sorted list proofs (which use DESCENDING order), we reverse:
+*)
+
+(* Predicate: list is sorted in ascending order (strictly increasing) *)
+Fixpoint Sorted_asc (l : list nat) : Prop :=
+  match l with
+  | [] => True
+  | [_] => True
+  | x :: (y :: _) as xs => x < y /\ Sorted_asc xs
+  end.
+
+(* Descending sorted version of zeckendorf (for use with Sorted_dec proofs) *)
+Definition zeckendorf_sorted (n : nat) : list nat :=
+  rev (zeckendorf n []).
+
+(* Helper lemmas for sorted lists and append *)
+
+(* Sorted_dec list with single element appended *)
+Lemma sorted_dec_app_singleton : forall l x,
+  Sorted_dec l ->
+  (forall y, In y l -> y > x) ->
+  Sorted_dec (l ++ [x]).
+Proof.
+  induction l as [|z zs IH]; intros x Hsorted Hall_gt.
+  - (* l = [] *)
+    simpl. auto.
+  - (* l = z :: zs *)
+    destruct zs as [|w ws].
+    + (* zs = [] *)
+      simpl. split; [apply Hall_gt; simpl; left; reflexivity | auto].
+    + (* zs = w :: ws *)
+      simpl in Hsorted. destruct Hsorted as [Hzw Htail].
+      simpl (z :: w :: ws ++ [x]).
+      split.
+      * exact Hzw.
+      * apply IH.
+        -- exact Htail.
+        -- intros y Hy. apply Hall_gt. simpl. right. exact Hy.
+Qed.
+
+(* Helper: last element of ascending sorted list is largest *)
+Lemma sorted_asc_last_max : forall x xs y,
+  Sorted_asc (x :: xs ++ [y]) ->
+  forall z, In z (x :: xs) -> z < y.
+Proof.
+  intros x xs. revert x. induction xs as [|w ws IH]; intros x y Hsorted z Hz.
+  - (* xs = [] *)
+    simpl in Hsorted, Hz. destruct Hsorted as [Hxy _].
+    destruct Hz as [Heq | Hfalse].
+    + subst. exact Hxy.
+    + contradiction.
+  - (* xs = w :: ws *)
+    simpl in Hz. destruct Hz as [Heq | Hin].
+    + (* z = x *)
+      subst z.
+      simpl in Hsorted. destruct Hsorted as [Hxw Hrest].
+      assert (Hwy: w < y).
+      { apply (IH w y Hrest w). simpl. left. reflexivity. }
+      lia.
+    + (* z in w :: ws *)
+      simpl in Hsorted. destruct Hsorted as [_ Hrest].
+      apply (IH w y Hrest z Hin).
+Qed.
+
+(* Helper: Reversal interchanges ascending and descending sorted *)
+Lemma rev_sorted_asc_dec : forall l,
+  Sorted_asc l <-> Sorted_dec (rev l).
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    simpl. split; intro; auto.
+  - (* l = x :: xs *)
+    split; intro H.
+    + (* Sorted_asc (x :: xs) -> Sorted_dec (rev (x :: xs)) *)
+      simpl (rev (x :: xs)).
+      destruct xs as [|y ys].
+      * (* xs = [] *)
+        simpl. auto.
+      * (* xs = y :: ys *)
+        simpl in H. destruct H as [Hxy Hrest].
+        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
+        (* Need: Sorted_dec (rev (y :: ys) ++ [x]) *)
+        apply sorted_dec_app_singleton.
+        -- (* Sorted_dec (rev (y :: ys)) *)
+           apply IH. exact Hrest.
+        -- (* All elements in rev (y :: ys) are > x *)
+           intros z Hz.
+           (* z is in rev (y :: ys), so z is in y :: ys *)
+           apply in_rev in Hz.
+           (* We need to show x < z *)
+           (* Since Sorted_asc (x :: y :: ys), we have x < y and Sorted_asc (y :: ys) *)
+           (* And z is in y :: ys *)
+           (* Since x < y and y is the first element, and the list is ascending, *)
+           (* all elements >= y, so x < y <= z, thus x < z *)
+           simpl in Hz. destruct Hz as [Heq | Hin].
+           ++ (* z = y *)
+              subst. exact Hxy.
+           ++ (* z in ys *)
+              (* From Sorted_asc (y :: ys), we have y < ... < z *)
+              (* Combined with x < y, we get x < z *)
+              assert (Hy_lt_z: y < z).
+              { (* TODO: Need to extract this from Sorted_asc (y :: ys) and In z ys *)
+                admit. }
+              lia.
+    + (* Sorted_dec (rev (x :: xs)) -> Sorted_asc (x :: xs) *)
+      (* TODO: This direction is less critical for our purposes - we mainly need *)
+      (* to prove that zeckendorf produces Sorted_asc, then convert via forward direction *)
+      admit.
+Admitted.  (* TODO: Complete the reverse direction when needed *)
+
+(*
+  Key theorem: zeckendorf produces sorted output in ascending order
+
+  This theorem states that the greedy algorithm naturally produces an
+  ascending sorted list (smallest to largest Fibonacci numbers).
+
+  Combined with rev_sorted_asc_dec, this means zeckendorf_sorted produces
+  descending sorted output suitable for use with our Sorted_dec proofs.
+*)
+Lemma zeckendorf_produces_sorted_asc : forall n acc,
+  Sorted_asc acc ->
+  (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x) ->
+  Sorted_asc (zeckendorf n acc).
+Proof.
+  (* TODO: Prove that greedy algorithm maintains ascending sorted order *)
+  (* Key insight: since we always prepend larger elements, and process *)
+  (* n in decreasing order, the prepends build up an ascending list *)
+  admit.
+Admitted.
+
+(*
+  Corollary: zeckendorf_sorted produces descending sorted output
+
+  Once we prove zeckendorf_produces_sorted_asc, this follows immediately.
+*)
+Lemma zeckendorf_sorted_produces_sorted_dec : forall n,
+  Sorted_dec (zeckendorf_sorted n).
+Proof.
+  intro n.
+  unfold zeckendorf_sorted.
+  apply rev_sorted_asc_dec.
+  apply (zeckendorf_produces_sorted_asc n []).
+  - (* Empty list is sorted *)
+    simpl. auto.
+  - (* acc = [] satisfies the condition *)
+    left. reflexivity.
+Admitted.  (* TODO: Relies on zeckendorf_produces_sorted_asc being proved *)
+
+(*
   Helper lemma: fuel-based version of non-consecutive property
 
   This lemma states that zeckendorf_fuel preserves the non-consecutive property:
