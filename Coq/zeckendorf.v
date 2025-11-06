@@ -1987,19 +1987,72 @@ Proof.
 
         (* Show j >= 2 *)
         assert (Hj_ge_2: j >= 2).
-        { (* Use the fact that y < fib k and y <> fib (k-1) and y <= fib (k-2) *)
-          (* We have k = S (S (S k''')), so k >= 3, thus k-2 >= 1 *)
-          (* If j = 0, then y = 0 and fib (k-2) >= fib 1 = 1, so y < fib (k-2) *)
-          (* If j = 1, then y = 1 and fib (k-2) >= fib 1 = 1, so y <= fib (k-2) *)
-          (* But we also need y to be a valid Zeckendorf component, which means j >= 2 *)
-          (* The constraint comes from the original lemma hypothesis: elements are from Zeckendorf reps *)
-          (* Actually, let's use a different approach: y <= fib (S k''') and y is a Fibonacci number *)
-          (* fib (S k''') >= fib 1 = 1 since S k''' >= 1 *)
-          (* For j = 0: y = 0, but then if ys is non-empty, it contains elements < 0, impossible *)
-          (* For j = 1: y = 1 = fib 2 as well, so j could be 2 *)
-          (* The real constraint should come from the problem statement *)
-          (* For now, admit - this requires stronger hypotheses about valid Zeckendorf representations *)
-          admit. }
+        { (* Strategy: Show y > 0, then handle j = 0 and j = 1 cases *)
+          (* First show y > 0 *)
+          assert (Hy_pos: y > 0).
+          { (* Since the list is sorted and fib k is at the head, we have y < fib k *)
+            (* k = S (S (S k''')), so fib k >= fib 3 = 2 *)
+            (* If ys is non-empty, then there exists an element below y *)
+            (* All elements are Fibonacci numbers, and the only Fibonacci number <= 0 is fib 0 = 0 *)
+            (* But if y = 0, then ys would contain elements < 0, which is impossible *)
+            (* So y > 0 *)
+            destruct (Nat.eq_dec y 0) as [Heq0 | Hneq0].
+            - (* y = 0 *)
+              exfalso.
+              (* If y = 0, and ys is non-empty, let z be an element of ys *)
+              destruct ys as [|z zs].
+              + (* ys = [], so list is [fib k, 0] *)
+                (* sum = fib k + 0 = fib k < fib (S k) is what we need to prove *)
+                (* But this contradicts our context - we're in the case where xs = y :: ys *)
+                (* Actually, this is fine - sum = fib k + 0 < fib k + fib (k-1) holds *)
+                (* Let me reconsider the context... *)
+                (* We have Hy_lt_k: y < fib k, and y = 0, so 0 < fib k, which is true *)
+                (* The issue is whether y = 0 can appear in a Zeckendorf representation *)
+                (* Actually, 0 = fib 0, and in Zeckendorf reps, we typically start from fib 2 = 1 *)
+                (* The lemma hypothesis says all elements are Fibonacci numbers, not which indices *)
+                (* Let me try a different approach: use no_consecutive_fibs_sorted *)
+                (* If y = 0 = fib 0, then either ys = [] or ys starts with some z < 0 *)
+                (* But Fibonacci numbers are all >= 0, so z < 0 is impossible *)
+                (* So ys = [] in this case *)
+                (* Then sum_list [fib k, 0] = fib k, and we need fib k < fib (S k) *)
+                (* This follows from fib_mono *)
+                (* But wait, this doesn't lead to a contradiction... *)
+                (* The real issue: if y = 0, can we apply the IH? We need j >= 2 for IH *)
+                (* Actually, I think the correct approach is to add a hypothesis that indices >= 2 *)
+                (* For now, let me just admit this *)
+                admit.
+              + (* ys = z :: zs, so z < y = 0, thus z < 0 *)
+                (* But z is a Fibonacci number, so z >= 0, contradiction *)
+                assert (Hz_lt: z < 0).
+                { assert (Hsorted_y_ys: Sorted_dec (0 :: z :: zs)).
+                  { apply (sorted_tail (fib (S (S (S k'''))))).
+                    rewrite Heq0 in Hsorted. exact Hsorted. }
+                  simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [H0z _].
+                  exact H0z. }
+                (* z is a Fibonacci number *)
+                assert (Hz_fib: exists i, fib i = z).
+                { apply Hfib. simpl. right. right. left. reflexivity. }
+                (* But Fibonacci numbers are >= 0 *)
+                destruct Hz_fib as [i_z Heq_iz].
+                (* fib i_z >= 0, but z = fib i_z < 0, contradiction *)
+                lia.
+            - (* y <> 0, so y > 0 since y is a nat *)
+              lia. }
+
+          (* Now handle j = 0, 1 cases *)
+          destruct j as [|[|j']].
+          - (* j = 0: y = fib 0 = 0, contradicts Hy_pos *)
+            exfalso. rewrite <- Heq_j in Hy_pos. simpl in Hy_pos. lia.
+          - (* j = 1: y = fib 1 = 1 *)
+            (* But fib 1 = fib 2 = 1, so we can use j = 2 instead *)
+            (* Actually, we have y = fib 1, but we need j >= 2 *)
+            (* Since fib 1 = fib 2 = 1, if y = 1, we can't determine j uniquely *)
+            (* The issue is that Heq_j : fib j = y doesn't give us a unique j *)
+            (* Let's just assert that we can assume j >= 2 *)
+            (* In practice, Zeckendorf representations use indices >= 2 to avoid ambiguity *)
+            admit.
+          - (* j = S (S j') >= 2 *)
+            lia. }
 
         (* Apply IH with m = j *)
         assert (Hsum_bound: sum_list (y :: ys) < fib (S j)).
@@ -2075,7 +2128,16 @@ Proof.
           exfalso.
           (* If j >= S (S k'''), then fib j >= fib (S (S k''')) by monotonicity *)
           assert (Hfib_j_ge: fib j >= fib (S (S k'''))).
-          { admit. (* Need j >= 2 and S (S k''') >= 2, then use monotonicity *) }
+          { (* We have j >= S (S k''') from Hge, j >= 2 from Hj_ge_2 *)
+            (* Need to show S (S k''') >= 2 *)
+            (* k = S (S (S k''')) >= 3, so S (S k''') = k - 1 >= 2 *)
+            assert (Hk_minus_1_ge: S (S k''') >= 2) by lia.
+            (* Now apply monotonicity *)
+            destruct (Nat.eq_dec j (S (S k'''))) as [Heq | Hneq].
+            - rewrite Heq. lia.
+            - assert (Hj_gt: j > S (S k''')) by lia.
+              apply Nat.lt_le_incl.
+              apply fib_mono_lt; [exact Hk_minus_1_ge | exact Hj_ge_2 | exact Hj_gt]. }
           lia. }
 
         (* From j < S (S k'''), we get S j <= S (S k'''), so fib (S j) <= fib (S (S k''')) *)
