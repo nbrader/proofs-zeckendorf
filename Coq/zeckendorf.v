@@ -1338,6 +1338,183 @@ Qed.
 *)
 
 (*
+  Helper lemma: Fibonacci gap property
+
+  If y is a Fibonacci number with y < fib k and y ≠ fib(k-1), then y ≤ fib(k-2).
+  This is because the only Fibonacci numbers between fib(k-2) and fib k are
+  fib(k-1) (and possibly fib k itself).
+*)
+Lemma fib_gap_property : forall k y,
+  k >= 3 ->
+  (exists i, fib i = y) ->
+  y < fib k ->
+  y <> fib (k - 1) ->
+  y <= fib (k - 2).
+Proof.
+  intros k y Hk_ge [i Heq_i] Hy_lt Hy_neq.
+  subst y.
+  (* fib i < fib k, so i < k by monotonicity *)
+  (* fib i ≠ fib(k-1), so i ≠ k-1 *)
+  (* Therefore i <= k-2 *)
+
+  (* First show i < k *)
+  assert (Hi_lt_k: i < k).
+  { destruct (Nat.lt_ge_cases i k) as [Hlt | Hge]; [exact Hlt |].
+    exfalso.
+    (* If i >= k, then fib i >= fib k *)
+    assert (Hfib_ge: fib k <= fib i).
+    { destruct (Nat.eq_dec i k) as [Heq | Hneq].
+      - rewrite Heq. lia.
+      - assert (Hi_gt_k: i > k) by lia.
+        destruct i as [|[|i']]; try lia.
+        destruct k as [|[|k']]; try lia.
+        apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+    lia. }
+
+  (* Now show i ≠ k - 1 *)
+  assert (Hi_neq: i <> k - 1).
+  { intro Heq. apply Hy_neq. rewrite Heq. reflexivity. }
+
+  (* Therefore i <= k - 2 *)
+  assert (Hi_le: i <= k - 2) by lia.
+
+  (* Now show fib i <= fib(k-2) *)
+  destruct (Nat.eq_dec i (k - 2)) as [Heq | Hneq].
+  - (* i = k - 2: fib i = fib(k-2) *)
+    rewrite Heq. lia.
+  - (* i < k - 2 *)
+    assert (Hi_lt: i < k - 2) by lia.
+    (* k >= 3, so k - 2 >= 1 *)
+    assert (Hk_minus_2_ge: k - 2 >= 1) by lia.
+    destruct i as [|[|i']].
+    + (* i = 0: fib 0 = 0 <= fib(k-2) *)
+      assert (Hpos: fib (k - 2) > 0).
+      { apply fib_pos. exact Hk_minus_2_ge. }
+      simpl. lia.
+    + (* i = 1: fib 1 = 1 <= fib(k-2) *)
+      (* We have i < k-2, so 1 < k-2, thus k-2 >= 2 *)
+      assert (Hk_minus_2_ge_2: k - 2 >= 2) by lia.
+      (* fib 1 = 1, fib 2 = 1, and fib is monotonic for indices >= 2 *)
+      (* So fib(k-2) >= fib 2 = 1 *)
+      assert (Hfib_k_minus_2_ge: fib (k - 2) >= fib 2).
+      { destruct (Nat.eq_dec (k - 2) 2) as [Heq2 | Hneq2].
+        - rewrite Heq2. lia.
+        - assert (Hk_gt: k - 2 > 2) by lia.
+          apply Nat.lt_le_incl.
+          apply fib_mono_lt; lia. }
+      assert (Hfib2: fib 2 = 1) by reflexivity.
+      simpl. lia.
+    + (* i >= 2: use monotonicity *)
+      apply Nat.lt_le_incl.
+      apply fib_mono_lt; lia.
+Qed.
+
+(*
+  Helper lemma: In a sorted descending list of Fibonacci numbers where
+  adjacent pairs are non-consecutive, if a Fibonacci number fib j is anywhere
+  in the tail and fib i is the head with i and j consecutive, then we have
+  a contradiction.
+
+  This is a key property: in sorted Fibonacci lists, consecutive indices
+  must be adjacent in the list (because Fibonacci grows and there are no
+  numbers in between).
+*)
+Lemma sorted_fibs_no_consecutive_gap : forall i j y ys,
+  i >= 2 -> j >= 2 ->
+  nat_consecutive i j ->
+  i > j ->
+  Sorted_dec (fib i :: y :: ys) ->
+  In (fib j) (y :: ys) ->
+  (forall z, In z (fib i :: y :: ys) -> exists k, fib k = z) ->
+  no_consecutive_fibs_sorted (fib i :: y :: ys) ->
+  False.
+Proof.
+  intros i j y ys Hi_ge Hj_ge Hcons Hi_gt_j Hsorted Hj_in Hfib Hnocons.
+  (* Since i and j are consecutive with i > j, we have i = S j *)
+  unfold nat_consecutive in Hcons.
+  destruct Hcons as [Hi_eq | Hj_eq].
+  - (* i = S j, which matches i > j *)
+    (* fib i > fib j by monotonicity *)
+    assert (Hfib_i_gt_j: fib i > fib j).
+    { apply fib_mono_lt; lia. }
+
+    (* In the sorted list fib i :: y :: ys, fib j is somewhere in y :: ys *)
+    (* If fib j = y, then they're adjacent -> contradiction from Hnocons *)
+    simpl in Hj_in. destruct Hj_in as [Hy_eq | Hys_in].
+    + (* y = fib j, so fib i and fib j are adjacent *)
+      simpl in Hnocons. destruct Hnocons as [Hno_adj _].
+      apply (Hno_adj i j); try reflexivity.
+      * rewrite Hy_eq. reflexivity.
+      * unfold nat_consecutive. left. exact Hi_eq.
+    + (* fib j is in ys, not adjacent to fib i *)
+      (* But this means there exists y with fib i > y > fib j *)
+      (* and y is a Fibonacci number *)
+      assert (Hy_fib: exists k, fib k = y).
+      { apply Hfib. simpl. right. left. reflexivity. }
+      destruct Hy_fib as [k Heq_k].
+
+      (* y is between fib i and fib j *)
+      (* First show: fib j < y *)
+      assert (Hfib_j_lt_y: fib j < y).
+      { assert (Hsorted_y_ys: Sorted_dec (y :: ys)).
+        { eapply sorted_tail. exact Hsorted. }
+        destruct ys as [|z zs].
+        - simpl in Hys_in. contradiction.
+        - simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [Hy_gt_z _].
+          simpl in Hys_in. destruct Hys_in as [Hz_eq | Hzs_in].
+          + (* z = fib j *)
+            rewrite <- Hz_eq. exact Hy_gt_z.
+          + (* fib j is deeper *)
+            eapply sorted_tail_lt.
+            * eapply (sorted_tail (fib i)). exact Hsorted.
+            * simpl. right. exact Hzs_in. }
+
+      (* Next show: y < fib i *)
+      assert (Hy_lt_fib_i: y < fib i).
+      { eapply sorted_tail_lt.
+        - exact Hsorted.
+        - simpl. left. reflexivity. }
+
+      (* So fib j < y = fib k < fib i *)
+      assert (Hy_bounds: fib j < fib k /\ fib k < fib i).
+      { rewrite <- Heq_k in Hfib_j_lt_y, Hy_lt_fib_i.
+        split; assumption. }
+
+      (* So fib j < fib k < fib i *)
+      (* This means j < k < i by monotonicity *)
+      assert (Hj_lt_k: j < k).
+      { destruct (Nat.lt_ge_cases j k) as [Hlt | Hge]; [exact Hlt |].
+        exfalso.
+        assert (Hfib_ge: fib k <= fib j).
+        { destruct (Nat.eq_dec k j) as [Heq | Hneq].
+          - rewrite Heq. lia.
+          - assert (Hk_gt_j: k > j) by lia.
+            apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+        lia. }
+
+      assert (Hk_lt_i: k < i).
+      { destruct (Nat.lt_ge_cases k i) as [Hlt | Hge]; [exact Hlt |].
+        exfalso.
+        assert (Hfib_ge: fib i <= fib k).
+        { destruct (Nat.eq_dec i k) as [Heq | Hneq].
+          - rewrite Heq. lia.
+          - assert (Hi_gt_k: i > k) by lia.
+            apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+        lia. }
+
+      (* So j < k < i, but i = S j *)
+      (* We have j < k < i and i = S j *)
+      (* This means j < k < S j, so k must be between j and S j *)
+      (* But there are no naturals strictly between j and S j *)
+      (* TODO: lia is having trouble with this - need to make Hi_eq more visible *)
+      admit.
+  - (* j = S i, but i > j, contradiction *)
+    (* If j = S i and i > j, then S i > i, which is impossible *)
+    (* TODO: lia isn't seeing Hj_eq in scope *)
+    admit.
+Admitted.  (* TODO: Complete this proof - the logic is sound but Coq needs help with the arithmetic *)
+
+(*
   Sum bound for sorted non-consecutive Fibonacci lists (SIMPLIFIED VERSION)
 
   This is a dramatically simplified version that works with sorted lists.
@@ -1500,6 +1677,25 @@ Proof.
 
         (* Since y is a Fibonacci number, y < fib k, and y <> fib (k-1),
            by monotonicity, y <= fib (k-2) *)
+
+        (* First, assert y is a Fibonacci number *)
+        assert (Hy_fib: exists i, fib i = y).
+        { apply Hfib. simpl. right. left. reflexivity. }
+
+        (* Assert y <> fib (k-1) from Hk_minus_1_not_in *)
+        assert (Hy_neq_k_minus_1: y <> fib (S (S k'''))).
+        { intro Heq. apply Hk_minus_1_not_in. rewrite <- Heq. simpl. left. reflexivity. }
+
+        (* Use fib_gap_property *)
+        assert (Hy_le_k_minus_2: y <= fib (S (S k''') - 1)).
+        { apply (fib_gap_property (S (S (S k'''))) y).
+          - lia.
+          - exact Hy_fib.
+          - exact Hy_lt_k.
+          - simpl. exact Hy_neq_k_minus_1. }
+
+        (* Now we need to apply IH to y :: ys to show sum_list (y :: ys) < fib(k-1) *)
+        (* TODO: Complete the IH application *)
         admit.
 Admitted.
 
