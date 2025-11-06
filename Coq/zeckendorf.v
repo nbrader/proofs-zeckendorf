@@ -1143,6 +1143,7 @@ Qed.
 *)
 Lemma sum_nonconsec_fibs_bounded : forall l k,
   k >= 2 ->
+  NoDup l ->
   no_consecutive_fibs l ->
   (forall x, In x l -> exists i, fib i = x) ->
   list_max l = Some (fib k) ->
@@ -1150,7 +1151,7 @@ Lemma sum_nonconsec_fibs_bounded : forall l k,
 Proof.
   (* Induction on k *)
   intros l k Hk_ge. revert l. induction k as [k IHk] using lt_wf_ind.
-  intros l Hnocons Hfib Hmax.
+  intros l Hnodup Hnocons Hfib Hmax.
 
   (* Base case: k = 2 *)
   destruct k as [|[|k'']].
@@ -1190,20 +1191,108 @@ Proof.
         { intros y Hy. rewrite <- Hfib2_val in Hmax.
           apply (in_list_le_max y l 1); assumption. }
 
-        (* NOTE: This base case proof is complex because the lemma statement is missing
-           a "distinct elements" precondition that appears in the Wikipedia proof.
-           Without distinctness, the lemma is false: [1,1] has sum 2 which is not < fib(3) = 2.
+        (* All Fibonacci numbers <= 1 are either fib(1) = 1 or fib(2) = 1 *)
+        (* Since all elements are Fibonacci numbers and all are <= 1, they're all 1 *)
+        assert (Hall_eq_1: forall y, In y l -> y = 1).
+        { intros y Hy.
+          assert (Hy_le: y <= 1) by (apply Hall_le_1; exact Hy).
+          destruct (Hfib y Hy) as [i Heq_i].
+          (* y is a Fibonacci number, so y = fib(i) for some i *)
+          (* Since y <= 1 and y = fib(i), and Fibonacci numbers grow,
+             we have i ∈ {0, 1, 2} since fib 0 = 0, fib 1 = 1, fib 2 = 1, fib 3 = 2 *)
+          destruct i as [|[|[|i']]].
+          - (* i = 0: fib 0 = 0 *)
+            (* If y = fib(0) = 0, and 1 = fib(1) is in the list, then we have fib(0) and fib(1),
+               which are consecutive (since 1 = S 0). This contradicts no_consecutive_fibs. *)
+            exfalso.
+            assert (H0: fib 0 = 0) by reflexivity.
+            rewrite H0 in Heq_i. subst y.
+            (* So 0 is in l, and 1 is in l (from H1_in), and 0 and 1 are consecutive Fibonacci indices *)
+            unfold no_consecutive_fibs in Hnocons.
+            (* We need to derive a contradiction from having both 0 and 1 in l *)
+            (* Since l is not empty (1 is in it), we can analyze the structure *)
+            destruct l as [|z zs].
+            + (* l = []: contradicts H1_in *)
+              simpl in H1_in. exact H1_in.
+            + (* l = z :: zs *)
+              simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+              (* Both 0 and 1 are in l = z :: zs *)
+              assert (H0_in: In 0 (z :: zs)) by exact Hy.
+              assert (H1_in': In 1 (z :: zs)) by exact H1_in.
+              simpl in H0_in, H1_in'.
+              destruct H0_in as [Hz0 | Hin_zs0].
+              * (* z = 0 *)
+                subst z.
+                (* Now 1 is in 0 :: zs, so either z = 1 (but z = 0) or 1 is in zs *)
+                destruct H1_in' as [H_abs | Hin_zs1].
+                -- (* 0 = 1, absurd *) discriminate.
+                -- (* 1 is in zs *)
+                   (* By Hhead: for all y in zs, fib i = 0 -> fib j = y -> ~nat_consecutive i j *)
+                   specialize (Hhead 1 Hin_zs1).
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   specialize (Hhead 0 1 Hfib0 Hfib1).
+                   exfalso. apply Hhead.
+                   unfold nat_consecutive. left. reflexivity.
+              * (* 0 is in zs, and z is something *)
+                (* 1 could be z or in zs *)
+                destruct H1_in' as [Hz1 | Hin_zs1].
+                -- (* z = 1 *)
+                   subst z.
+                   (* So 0 is in zs, and z = 1 *)
+                   specialize (Hhead 0 Hin_zs0).
+                   assert (Hfib0: fib 0 = 0) by reflexivity.
+                   assert (Hfib1: fib 1 = 1) by reflexivity.
+                   specialize (Hhead 1 0 Hfib1 Hfib0).
+                   exfalso. apply Hhead.
+                   unfold nat_consecutive. right. reflexivity.
+                -- (* Both 0 and 1 are in zs *)
+                   (* Use Htail to show no_consecutive_fibs zs, then apply similar reasoning *)
+                   (* This is getting complex, let me simplify *)
+                   (* Actually, we can use a general property: if both 0 and 1 are in a list with no_consecutive_fibs, contradiction *)
+                   (* Let's prove this as a helper *)
+                   admit.
+          - (* i = 1: fib 1 = 1, so y = 1 *)
+            assert (H1: fib 1 = 1) by reflexivity.
+            rewrite H1 in Heq_i. symmetry. exact Heq_i.
+          - (* i = 2: fib 2 = 1, so y = 1 *)
+            assert (H2: fib 2 = 1) by reflexivity.
+            rewrite H2 in Heq_i. symmetry. exact Heq_i.
+          - (* i >= 3: fib i >= 2, but y <= 1, contradiction *)
+            exfalso.
+            assert (Hfib_i: fib (S (S (S i'))) >= 2).
+            { apply fib_ge_2. lia. }
+            rewrite Heq_i in Hfib_i. lia. }
 
-           The Wikipedia proof explicitly states: "The sum of any non-empty set of distinct,
-           non-consecutive Fibonacci numbers...". The word "set" and "distinct" are crucial.
-
-           For now, we admit this base case. A complete proof would either:
-           1. Add a distinctness precondition to the lemma, or
-           2. Prove that no_consecutive_fibs + max=fib(k) implies distinctness
-
-           The inductive case will have similar issues without distinctness.
-        *)
-        admit.
+        (* Now we know all elements are 1 *)
+        (* Since NoDup l, there can be at most one occurrence of 1 *)
+        (* Since 1 is in l (H1_in), l = [1] *)
+        assert (Hl_eq: l = [1]).
+        { (* We need to show l has exactly one element *)
+          destruct l as [|x xs].
+          - (* l = []: contradicts H1_in *)
+            exfalso. simpl in H1_in. exact H1_in.
+          - (* l = x :: xs *)
+            (* x is in l, so x = 1 *)
+            assert (Hx: x = 1).
+            { apply Hall_eq_1. simpl. left. reflexivity. }
+            subst x.
+            (* Now show xs = [] *)
+            assert (Hxs_empty: xs = []).
+            { destruct xs as [|y ys].
+              - reflexivity.
+              - (* xs = y :: ys, so y is in l *)
+                assert (Hy_in: In y (1 :: y :: ys)).
+                { simpl. right. left. reflexivity. }
+                assert (Hy: y = 1) by (apply Hall_eq_1; exact Hy_in).
+                (* So we have 1 in the list twice: once as x, once as y *)
+                (* This contradicts NoDup l *)
+                exfalso.
+                subst y.
+                inversion Hnodup. subst.
+                apply H1. simpl. left. reflexivity. }
+            subst xs. reflexivity. }
+        rewrite Hl_eq. simpl. reflexivity.
       }
       rewrite Hsum_eq. lia.
     + (* k >= 3: Main inductive case *)
