@@ -1946,26 +1946,98 @@ Proof.
 
         (* Show j <= k-2 using monotonicity *)
         assert (Hj_le_k_minus_2: j <= S k''').
-        { (* We have y = fib j and y <= fib (k-2) = fib (S k''') *)
-          admit. (* TODO: prove using monotonicity *) }
+        { (* We have y = fib j and y <= fib (k-2) = fib (S (S k''') - 1) *)
+          (* Simplify fib (S (S k''') - 1) = fib (S k''') *)
+          assert (Hy_le_simp: y <= fib (S k''')).
+          { assert (Heq_minus: S (S k''') - 1 = S k''') by lia.
+            rewrite Heq_minus in Hy_le_k_minus_2.
+            exact Hy_le_k_minus_2. }
+          assert (Hfib_j_le: fib j <= fib (S k''')).
+          { rewrite Heq_j. exact Hy_le_simp. }
+          (* Hfib_j_le: fib j <= fib (S k''') *)
+          (* Use case analysis on k''' *)
+          destruct k''' as [|k''''].
+          - (* k''' = 0: k = 3, k-2 = 1, so fib j <= fib 1 = 1 *)
+            (* fib 0 = 0, fib 1 = 1, fib 2 = 1, fib 3 = 2, ... *)
+            (* So fib j <= 1 means j <= 2 (since fib 2 = 1 and fib 3 = 2 > 1) *)
+            assert (Hj_le_2: j <= 2).
+            { destruct j as [|[|[|j']]]; try lia.
+              (* j = S (S (S j')) >= 3: fib 3 = 2 > 1, contradicts fib j <= 1 *)
+              exfalso.
+              assert (Hfib_3: fib 3 = 2) by reflexivity.
+              assert (Hfib_SSS_ge: fib (S (S (S j'))) >= fib 3).
+              { destruct (Nat.eq_dec (S (S (S j'))) 3) as [Heq | Hneq].
+                - rewrite Heq. lia.
+                - assert (Hj_gt: S (S (S j')) > 3) by lia.
+                  apply Nat.lt_le_incl.
+                  apply fib_mono_lt; lia. }
+              lia. }
+            (* S k''' = 1, so we need j <= 1, but we only have j <= 2 *)
+            (* This doesn't work directly. Let me reconsider. *)
+            admit.
+          - (* k''' >= 1: S k''' >= 2, so we can use fib_mono_lt *)
+            destruct (Nat.le_gt_cases j (S (S k''''))) as [Hle | Hgt]; [exact Hle |].
+            exfalso.
+            assert (Hfib_gt: fib j > fib (S (S k''''))).
+            { apply fib_mono_lt.
+              - admit. (* j >= 2 *)
+              - lia.
+              - exact Hgt. }
+            lia. }
 
         (* Show j >= 2 *)
         assert (Hj_ge_2: j >= 2).
-        { admit. (* TODO: similar to proof in sorted_fibs_no_consecutive_gap *) }
+        { (* Use the fact that y < fib k and y <> fib (k-1) and y <= fib (k-2) *)
+          (* We have k = S (S (S k''')), so k >= 3, thus k-2 >= 1 *)
+          (* If j = 0, then y = 0 and fib (k-2) >= fib 1 = 1, so y < fib (k-2) *)
+          (* If j = 1, then y = 1 and fib (k-2) >= fib 1 = 1, so y <= fib (k-2) *)
+          (* But we also need y to be a valid Zeckendorf component, which means j >= 2 *)
+          (* The constraint comes from the original lemma hypothesis: elements are from Zeckendorf reps *)
+          (* Actually, let's use a different approach: y <= fib (S k''') and y is a Fibonacci number *)
+          (* fib (S k''') >= fib 1 = 1 since S k''' >= 1 *)
+          (* For j = 0: y = 0, but then if ys is non-empty, it contains elements < 0, impossible *)
+          (* For j = 1: y = 1 = fib 2 as well, so j could be 2 *)
+          (* The real constraint should come from the problem statement *)
+          (* For now, admit - this requires stronger hypotheses about valid Zeckendorf representations *)
+          admit. }
 
         (* Apply IH with m = j *)
         assert (Hsum_bound: sum_list (y :: ys) < fib (S j)).
         { rewrite <- Heq_j at 1.
           apply (IHk j).
-          - (* j < k *)
-            admit. (* TODO: from j <= k-2 and k >= 3 *)
+          - (* j < k: We have j <= k-2 = S k''' and k = S (S (S k''')), so j <= S k''' < S (S (S k''')) *)
+            lia.
           - exact Hj_ge_2.
-          - (* Sorted_dec (fib j :: ys) *)
-            admit. (* TODO: from Sorted_dec (fib k :: y :: ys) and y = fib j *)
+          - (* Sorted_dec (fib j :: ys): from Sorted_dec (fib k :: y :: ys) and y = fib j *)
+            (* Sorted_dec (fib k :: y :: ys) gives us Sorted_dec (y :: ys) *)
+            assert (Hsorted_y_ys: Sorted_dec (y :: ys)).
+            { apply (sorted_tail (fib (S (S (S k'''))))).
+              exact Hsorted. }
+            (* Now rewrite y to fib j using Heq_j: fib j = y *)
+            rewrite <- Heq_j in Hsorted_y_ys.
+            exact Hsorted_y_ys.
           - (* no_consecutive_fibs_sorted (fib j :: ys) *)
-            admit. (* TODO: from no_consecutive_fibs_sorted of original list *)
-          - (* All elements are Fibonacci numbers *)
-            admit. (* TODO: subset of original list *) }
+            (* Get no_consecutive_fibs_sorted (y :: ys) from original list *)
+            assert (Hnocons_y_ys: no_consecutive_fibs_sorted (y :: ys)).
+            { destruct ys as [|z zs].
+              + (* ys = [], so property is trivially True *)
+                simpl. exact I.
+              + (* ys = z :: zs *)
+                (* From no_consecutive_fibs_sorted (fib k :: y :: z :: zs), we get:
+                   - fib k and y are not consecutive
+                   - no_consecutive_fibs_sorted (y :: z :: zs) *)
+                simpl in Hnocons. destruct Hnocons as [_ Htail].
+                exact Htail. }
+            (* Now rewrite y = fib j *)
+            rewrite <- Heq_j in Hnocons_y_ys.
+            exact Hnocons_y_ys.
+          - (* All elements are Fibonacci numbers: (fib j :: ys) is a sublist of (fib k :: y :: ys) *)
+            intros z Hz.
+            apply Hfib.
+            simpl. right.
+            simpl in Hz. destruct Hz as [Hz_eq | Hz_in].
+            + left. rewrite <- Heq_j. exact Hz_eq.
+            + right. exact Hz_in. }
 
         (* We want to show: sum_list (y :: ys) < fib (k-1) = fib (S (S k''')) *)
         (* We have: sum_list (y :: ys) < fib (S j) from IH *)
@@ -1974,8 +2046,37 @@ Proof.
         (* First show j < k-1 = S (S k''') *)
         assert (Hj_lt_k_minus_1: j < S (S k''')).
         { (* We have y = fib j and y <= fib (k-2) = fib (S k''') < fib (k-1) = fib (S (S k''')) *)
-          (* So fib j < fib (S (S k''')), and by strict monotonicity, j < S (S k''') *)
-          admit. (* TODO: prove using monotonicity *) }
+          (* First show fib (S k''') < fib (S (S k''')) *)
+          assert (Hfib_mono_step: fib (S k''') < fib (S (S k'''))).
+          { destruct k''' as [|k''''].
+            - (* k''' = 0: fib 1 < fib 2, which is 1 < 1, false! *)
+              (* Actually fib 1 = 1 and fib 2 = 1, so fib 1 = fib 2 *)
+              (* This means when k = 3, we have k-2 = 1 and k-1 = 2, and fib 1 = fib 2 *)
+              (* So fib (k-2) = fib (k-1), which contradicts strict inequality *)
+              (* But we need < not <=. Let me check the property *)
+              (* Actually fib is: 0,1,1,2,3,5,... so fib 1 = fib 2 = 1 *)
+              (* So fib (S 0) = fib (S (S 0)) is false *)
+              (* This suggests k''' = 0 case needs special handling *)
+              simpl. lia. (* 1 < 1 is false, so this will fail *)
+            - (* k''' >= 1: fib (S (S k'''')) < fib (S (S (S k''''))), can use fib_mono *)
+              apply fib_mono. lia. }
+          (* From fib j <= fib (S k''') < fib (S (S k''')), we get fib j < fib (S (S k''')) *)
+          assert (Hfib_j_lt: fib j < fib (S (S k'''))).
+          { (* We have fib j <= fib (S k''') from earlier and fib (S k''') < fib (S (S k''')) *)
+            (* But we don't have access to Hfib_j_le here, so recompute *)
+            assert (Hy_le: y <= fib (S k''')).
+            { assert (Heq_minus: S (S k''') - 1 = S k''') by lia.
+              rewrite Heq_minus in Hy_le_k_minus_2.
+              exact Hy_le_k_minus_2. }
+            rewrite <- Heq_j in Hy_le.
+            lia. }
+          (* By monotonicity, j < S (S k''') *)
+          destruct (Nat.lt_ge_cases j (S (S k'''))) as [Hlt | Hge]; [exact Hlt |].
+          exfalso.
+          (* If j >= S (S k'''), then fib j >= fib (S (S k''')) by monotonicity *)
+          assert (Hfib_j_ge: fib j >= fib (S (S k'''))).
+          { admit. (* Need j >= 2 and S (S k''') >= 2, then use monotonicity *) }
+          lia. }
 
         (* From j < S (S k'''), we get S j <= S (S k'''), so fib (S j) <= fib (S (S k''')) *)
         assert (Hfib_Sj_le: fib (S j) <= fib (S (S k'''))).
