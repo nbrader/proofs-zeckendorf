@@ -2957,8 +2957,8 @@ Proof.
         + (* Case: x1 < x2 *)
           (* Since l1 is sorted descending, x1 is the maximum of l1 *)
           (* Since l2 is sorted descending, x2 is the maximum of l2 *)
-          (* We have: sum_list l1 < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
-          assert (Hsum1_bound: sum_list l1 < fib (S i1)).
+          (* We have: sum_list (x1 :: xs1) < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
+          assert (Hsum1_bound: sum_list (x1 :: xs1) < fib (S i1)).
           { apply (sum_nonconsec_fibs_bounded_sorted i1 xs1); try assumption.
             - simpl. split; [| exact Hsorted1].
               (* Need x1 > head of xs1 if xs1 is non-empty *)
