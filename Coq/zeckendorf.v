@@ -2972,6 +2972,181 @@ Proof.
 Qed.
 
 (*
+  Helper lemmas to simplify application of zeckendorf_unique_sorted
+*)
+
+(*
+  Lemma: Sum of a reversed list equals sum of the original list
+*)
+Lemma sum_list_rev : forall l,
+  sum_list (rev l) = sum_list l.
+Proof.
+  induction l as [|x xs IH].
+  - simpl. reflexivity.
+  - simpl. rewrite sum_list_app. simpl.
+    rewrite Nat.add_0_r. rewrite IH. lia.
+Qed.
+
+(*
+  Helper: sum_list distributes over append
+*)
+Lemma sum_list_app : forall l1 l2,
+  sum_list (l1 ++ l2) = sum_list l1 + sum_list l2.
+Proof.
+  induction l1 as [|x xs IH]; intro l2.
+  - simpl. reflexivity.
+  - simpl. rewrite IH. lia.
+Qed.
+
+(*
+  Lemma: Reversal preserves no_consecutive_fibs property
+
+  If a list has no consecutive Fibonacci numbers, then its reversal
+  also has no consecutive Fibonacci numbers.
+*)
+Lemma rev_preserves_no_consecutive : forall l,
+  no_consecutive_fibs l ->
+  no_consecutive_fibs (rev l).
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    intro. simpl. trivial.
+  - (* l = x :: xs *)
+    intro Hnocons.
+    simpl.
+    simpl in Hnocons.
+    destruct Hnocons as [Hhead Htail].
+    (* rev (x :: xs) = rev xs ++ [x] *)
+    (* Need to show no_consecutive_fibs (rev xs ++ [x]) *)
+    apply no_consecutive_append_single.
+    + (* no_consecutive_fibs (rev xs) by IH *)
+      apply IH. exact Htail.
+    + (* Show x is not consecutive with any element in rev xs *)
+      intros y Hy_in i j Heq_i Heq_j Hcons.
+      (* y is in rev xs, so y is in xs *)
+      apply in_rev in Hy_in.
+      (* Apply Hhead with y from xs *)
+      apply (Hhead y Hy_in i j Heq_i Heq_j Hcons).
+Qed.
+
+(*
+  Conversion lemma: no_consecutive_fibs implies no_consecutive_fibs_sorted for sorted lists
+
+  For a descending-sorted list, if no two elements are consecutive Fibonacci numbers
+  (in the general sense), then adjacent elements are also not consecutive.
+*)
+Lemma no_consecutive_to_sorted : forall l,
+  Sorted_dec l ->
+  no_consecutive_fibs l ->
+  no_consecutive_fibs_sorted l.
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    intros _ _. simpl. trivial.
+  - (* l = x :: xs *)
+    intros Hsorted Hnocons.
+    destruct xs as [|y ys].
+    + (* xs = [] *)
+      simpl. trivial.
+    + (* xs = y :: ys *)
+      simpl.
+      split.
+      * (* Adjacent elements x and y are not consecutive *)
+        intros i j Heq_i Heq_j Hcons.
+        simpl in Hnocons.
+        destruct Hnocons as [Hhead _].
+        apply (Hhead y).
+        -- simpl. left. reflexivity.
+        -- exact Heq_i.
+        -- exact Heq_j.
+        -- exact Hcons.
+      * (* Recursively show tail is sorted *)
+        apply IH.
+        -- apply sorted_tail. exact Hsorted.
+        -- simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
+Qed.
+
+(*
+  Lemma: Elements in zeckendorf output have Fibonacci indices >= 2
+
+  This strengthens zeckendorf_fib_property to show that not only are all
+  elements Fibonacci numbers, but they have indices >= 2, which excludes
+  fib(0) = 0 and fib(1) = 1.
+
+  This is important for Zeckendorf representations since we typically start
+  from fib(2) = 1 to avoid the ambiguity that fib(1) = fib(2) = 1.
+*)
+Lemma zeckendorf_fib_indices_ge_2 : forall n z,
+  In z (zeckendorf n []) ->
+  exists k, k >= 2 /\ fib k = z.
+Proof.
+  intros n z Hz.
+  (* Get that z is a Fibonacci number *)
+  assert (Hfib: exists k, fib k = z).
+  { apply zeckendorf_fib_property. exact Hz. }
+  destruct Hfib as [k Heq_k].
+
+  (* We need to show k >= 2 *)
+  (* Strategy: show z > 0, which rules out k = 0 *)
+  (* Then show z <> 1 or handle z = 1 case carefully *)
+
+  (* For now, we admit this - it requires analyzing the algorithm more carefully *)
+  (* The algorithm starts from fibs_upto which uses seq 1 (S n), so indices start at 1 *)
+  (* But we'd need to prove it never picks fib(1) = 1 or fib(0) = 0 *)
+  exists k. split.
+  - admit. (* TODO: Prove k >= 2 by analyzing fibs_upto and the greedy selection *)
+  - exact Heq_k.
+Admitted.
+
+(*
+  Corollary: Easier application of uniqueness for zeckendorf_sorted outputs
+
+  This provides a more convenient form for proving that two uses of zeckendorf_sorted
+  with the same sum produce the same result, assuming the sorted property holds.
+*)
+Corollary zeckendorf_sorted_unique : forall n,
+  Sorted_dec (zeckendorf_sorted n) ->
+  forall l,
+    Sorted_dec l ->
+    no_consecutive_fibs l ->
+    (forall x, In x l -> exists k, k >= 2 /\ fib k = x) ->
+    sum_list l = n ->
+    l = zeckendorf_sorted n.
+Proof.
+  intros n Hsorted_zeck l Hsorted_l Hnocons_l Hfib_l Hsum_l.
+
+  (* Apply zeckendorf_unique_sorted *)
+  apply zeckendorf_unique_sorted with (n := n).
+  - (* Sorted_dec l *)
+    exact Hsorted_l.
+  - (* Sorted_dec (zeckendorf_sorted n) *)
+    exact Hsorted_zeck.
+  - (* no_consecutive_fibs_sorted l *)
+    apply no_consecutive_to_sorted; assumption.
+  - (* no_consecutive_fibs_sorted (zeckendorf_sorted n) *)
+    apply no_consecutive_to_sorted.
+    + exact Hsorted_zeck.
+    + unfold zeckendorf_sorted.
+      (* Reversal preserves no_consecutive_fibs *)
+      apply rev_preserves_no_consecutive.
+      apply zeckendorf_no_consecutive.
+  - (* All elements in l have indices >= 2 *)
+    exact Hfib_l.
+  - (* All elements in zeckendorf_sorted n have indices >= 2 *)
+    intros x Hx.
+    unfold zeckendorf_sorted in Hx.
+    apply in_rev in Hx.
+    apply zeckendorf_fib_indices_ge_2.
+    exact Hx.
+  - (* sum_list l = n *)
+    exact Hsum_l.
+  - (* sum_list (zeckendorf_sorted n) = n *)
+    unfold zeckendorf_sorted.
+    rewrite sum_list_rev.
+    apply zeckendorf_sum_property.
+Admitted. (* Has admits in proof *)
+
+(*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
 
   This combines the three properties to show that our algorithm produces
