@@ -902,6 +902,57 @@ Proof.
       apply (IH w y Hrest z Hin).
 Qed.
 
+(* Helper: In an ascending sorted list, head is less than all elements in tail *)
+Lemma sorted_asc_head_lt_tail : forall y ys z,
+  Sorted_asc (y :: ys) ->
+  In z ys ->
+  y < z.
+Proof.
+  intros y ys. revert y. induction ys as [|w ws IH]; intros y z Hsorted Hz.
+  - (* ys = [] *)
+    simpl in Hz. contradiction.
+  - (* ys = w :: ws *)
+    simpl in Hsorted. destruct Hsorted as [Hyw Hrest].
+    simpl in Hz. destruct Hz as [Heq | Hin].
+    + (* z = w *)
+      subst. exact Hyw.
+    + (* z in ws *)
+      assert (Hw_lt_z: w < z).
+      { apply (IH w z Hrest Hin). }
+      lia.
+Qed.
+
+(* Helper: Sorted_dec with appended singleton implies properties about head *)
+Lemma sorted_dec_app_singleton_inv : forall l x,
+  Sorted_dec (l ++ [x]) ->
+  (forall y, In y l -> y > x).
+Proof.
+  induction l as [|z zs IH]; intros x Hsorted y Hy.
+  - (* l = [] *)
+    simpl in Hy. contradiction.
+  - (* l = z :: zs *)
+    simpl in Hy. destruct Hy as [Heq | Hin].
+    + (* y = z *)
+      subst y.
+      destruct zs as [|w ws].
+      * (* zs = [] *)
+        simpl in Hsorted. exact Hsorted.
+      * (* zs = w :: ws *)
+        simpl in Hsorted. destruct Hsorted as [_ Htail].
+        apply IH in Htail.
+        -- assert (Hw_gt_x: w > x).
+           { apply Htail. left. reflexivity. }
+           lia.
+        -- left. reflexivity.
+    + (* y in zs *)
+      destruct zs as [|w ws].
+      * (* zs = [] *)
+        simpl in Hin. contradiction.
+      * (* zs = w :: ws *)
+        simpl in Hsorted. destruct Hsorted as [_ Htail].
+        apply IH; assumption.
+Qed.
+
 (* Helper: Reversal interchanges ascending and descending sorted *)
 Lemma rev_sorted_asc_dec : forall l,
   Sorted_asc l <-> Sorted_dec (rev l).
@@ -939,14 +990,35 @@ Proof.
               (* From Sorted_asc (y :: ys), we have y < ... < z *)
               (* Combined with x < y, we get x < z *)
               assert (Hy_lt_z: y < z).
-              { (* TODO: Need to extract this from Sorted_asc (y :: ys) and In z ys *)
-                admit. }
+              { apply (sorted_asc_head_lt_tail y ys z Hrest Hin). }
               lia.
     + (* Sorted_dec (rev (x :: xs)) -> Sorted_asc (x :: xs) *)
-      (* TODO: This direction is less critical for our purposes - we mainly need *)
-      (* to prove that zeckendorf produces Sorted_asc, then convert via forward direction *)
-      admit.
-Admitted.  (* TODO: Complete the reverse direction when needed *)
+      simpl (rev (x :: xs)) in H.
+      destruct xs as [|y ys].
+      * (* xs = [] *)
+        simpl. auto.
+      * (* xs = y :: ys *)
+        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
+        (* From Sorted_dec (rev (y :: ys) ++ [x]), we can show: *)
+        (* 1. Sorted_dec (rev (y :: ys)) -> Sorted_asc (y :: ys) by IH *)
+        (* 2. All elements in rev (y :: ys) are > x *)
+        simpl. split.
+        -- (* x < y *)
+           apply sorted_dec_app_singleton_inv with (l := rev (y :: ys)) in H.
+           apply H. apply in_rev. left. reflexivity.
+        -- (* Sorted_asc (y :: ys) *)
+           (* First extract Sorted_dec (rev (y :: ys)) from H *)
+           assert (Hsorted_rev: Sorted_dec (rev (y :: ys))).
+           { clear IH. revert x H. induction (rev (y :: ys)) as [|z zs IH2].
+             - simpl. auto.
+             - intros x H. destruct zs as [|w ws].
+               + simpl. auto.
+               + simpl in H. destruct H as [Hzw Htail].
+                 simpl. split.
+                 * exact Hzw.
+                 * apply IH2. exact Htail. }
+           apply IH. exact Hsorted_rev.
+Qed.
 
 (*
   Key theorem: zeckendorf produces sorted output in ascending order
@@ -956,6 +1028,11 @@ Admitted.  (* TODO: Complete the reverse direction when needed *)
 
   Combined with rev_sorted_asc_dec, this means zeckendorf_sorted produces
   descending sorted output suitable for use with our Sorted_dec proofs.
+
+  TODO: This proof requires showing that the greedy algorithm maintains the
+  sorted property by always prepending elements smaller than those already in
+  the accumulator. The key insight is that as n decreases, the largest Fibonacci
+  number <= n also decreases, using the remainder_less_than_prev_fib lemma.
 *)
 Lemma zeckendorf_produces_sorted_asc : forall n acc,
   Sorted_asc acc ->
@@ -2677,6 +2754,397 @@ Theorem zeckendorf_unique : forall n l1 l2,
   l1 = l2.
 Proof.
 Admitted.
+
+(*
+  ==============================================================================
+  ALTERNATIVE UNIQUENESS PROOF USING SORTED LISTS
+  ==============================================================================
+*)
+
+(*
+  Alternative uniqueness theorem for sorted Zeckendorf representations
+
+  This version proves uniqueness specifically for descending-sorted lists,
+  which simplifies the proof by avoiding the need for set difference operations.
+
+  Strategy:
+  1. If both lists are sorted descending with the same sum and properties,
+     they must have the same maximum element (by contradiction using
+     sum_nonconsec_fibs_bounded_sorted)
+  2. Remove the maximum from both lists and apply induction on the sum
+
+  This is cleaner than the general proof because sorted lists allow direct
+  structural comparison.
+*)
+Theorem zeckendorf_unique_sorted : forall n l1 l2,
+  Sorted_dec l1 ->
+  Sorted_dec l2 ->
+  no_consecutive_fibs_sorted l1 ->
+  no_consecutive_fibs_sorted l2 ->
+  (forall x, In x l1 -> exists i, i >= 2 /\ fib i = x) ->
+  (forall x, In x l2 -> exists i, i >= 2 /\ fib i = x) ->
+  sum_list l1 = n ->
+  sum_list l2 = n ->
+  l1 = l2.
+Proof.
+  intro n.
+  (* Induction on n to handle the sum *)
+  induction n as [n IHn] using lt_wf_ind.
+  intros l1 l2 Hsorted1 Hsorted2 Hnocons1 Hnocons2 Hfib1 Hfib2 Hsum1 Hsum2.
+
+  (* Case split on l1 *)
+  destruct l1 as [|x1 xs1].
+  - (* l1 = [] *)
+    (* Then sum_list l1 = 0 = n *)
+    simpl in Hsum1. subst n.
+    (* So sum_list l2 = 0 *)
+    simpl in Hsum2.
+    (* This means l2 must be empty too *)
+    destruct l2 as [|x2 xs2].
+    + reflexivity.
+    + (* l2 = x2 :: xs2 with sum 0 *)
+      (* But all elements are Fibonacci numbers >= 1 (since indices >= 2) *)
+      exfalso.
+      assert (Hx2_fib: exists i, i >= 2 /\ fib i = x2).
+      { apply Hfib2. simpl. left. reflexivity. }
+      destruct Hx2_fib as [i [Hi_ge Heq_i]].
+      (* fib i >= fib 2 = 1 for i >= 2 *)
+      assert (Hx2_ge: x2 >= 1).
+      { rewrite <- Heq_i.
+        destruct (Nat.eq_dec i 2) as [Heq2 | Hneq2].
+        - rewrite Heq2. simpl. lia.
+        - assert (Hi_gt: i > 2) by lia.
+          assert (Hfib_ge: fib i >= fib 2).
+          { destruct (Nat.eq_dec i 2) as [Heq | Hneq].
+            - rewrite Heq. lia.
+            - apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+          simpl in Hfib_ge. lia. }
+      (* sum_list (x2 :: xs2) >= x2 >= 1, contradicts sum = 0 *)
+      assert (Hsum_ge: sum_list (x2 :: xs2) >= x2).
+      { simpl. lia. }
+      lia.
+
+  - (* l1 = x1 :: xs1 *)
+    destruct l2 as [|x2 xs2].
+    + (* l2 = [], but l1 is non-empty with sum n *)
+      (* Similar contradiction as above *)
+      exfalso.
+      simpl in Hsum2. subst n.
+      assert (Hx1_fib: exists i, i >= 2 /\ fib i = x1).
+      { apply Hfib1. simpl. left. reflexivity. }
+      destruct Hx1_fib as [i [Hi_ge Heq_i]].
+      assert (Hx1_ge: x1 >= 1).
+      { rewrite <- Heq_i.
+        destruct (Nat.eq_dec i 2) as [Heq2 | Hneq2].
+        - rewrite Heq2. simpl. lia.
+        - assert (Hfib_ge: fib i >= fib 2).
+          { apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
+          simpl in Hfib_ge. lia. }
+      simpl in Hsum1.
+      lia.
+
+    + (* Both lists are non-empty: l1 = x1 :: xs1, l2 = x2 :: xs2 *)
+      (* Key claim: x1 = x2 (the maximum elements must be equal) *)
+
+      (* First, extract indices for x1 and x2 *)
+      assert (Hx1_fib: exists i1, i1 >= 2 /\ fib i1 = x1).
+      { apply Hfib1. simpl. left. reflexivity. }
+      destruct Hx1_fib as [i1 [Hi1_ge Heq_i1]].
+
+      assert (Hx2_fib: exists i2, i2 >= 2 /\ fib i2 = x2).
+      { apply Hfib2. simpl. left. reflexivity. }
+      destruct Hx2_fib as [i2 [Hi2_ge Heq_i2]].
+
+      (* Prove x1 = x2 by contradiction *)
+      assert (Hx1_eq_x2: x1 = x2).
+      { destruct (Nat.eq_dec x1 x2) as [Heq | Hneq]; [exact Heq |].
+        exfalso.
+        (* Assume x1 ≠ x2, derive contradiction using sum_nonconsec_fibs_bounded_sorted *)
+        (* WLOG, assume x1 < x2 (the other case is symmetric) *)
+        destruct (Nat.lt_gt_cases x1 x2) as [Hlt | Hgt]; [| destruct Hgt as [Hgt | Heq]; [| contradiction]].
+        - (* Case: x1 < x2 *)
+          (* Since l1 is sorted descending, x1 is the maximum of l1 *)
+          (* Since l2 is sorted descending, x2 is the maximum of l2 *)
+          (* We have: sum_list l1 < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
+          assert (Hsum1_bound: sum_list l1 < fib (S i1)).
+          { apply (sum_nonconsec_fibs_bounded_sorted i1 xs1); try assumption.
+            - simpl. split; [| exact Hsorted1].
+              (* Need x1 > head of xs1 if xs1 is non-empty *)
+              destruct xs1 as [|y1 ys1]; [trivial |].
+              simpl in Hsorted1. exact Hsorted1.
+            - intros z Hz. simpl in Hz.
+              destruct Hz as [Hz_eq | Hz_in].
+              + exists i1. split; [exact Hi1_ge | rewrite <- Heq_i1; exact Hz_eq].
+              + apply Hfib1. simpl. right. exact Hz_in. }
+          (* Also: x2 <= sum_list l2 (since x2 is in l2) *)
+          assert (Hx2_le_sum2: x2 <= sum_list l2).
+          { simpl. lia. }
+          (* We have i1 < i2 (since x1 = fib i1 < fib i2 = x2 and fib is injective/monotonic) *)
+          assert (Hi1_lt_i2: i1 < i2).
+          { destruct (Nat.lt_trichotomy i1 i2) as [Hlt' | [Heq' | Hgt']].
+            - exact Hlt'.
+            - exfalso. subst i2. rewrite Heq_i1 in Heq_i2. lia.
+            - exfalso.
+              assert (Hfib_gt: fib i2 < fib i1).
+              { apply fib_mono_lt; try assumption; lia. }
+              lia. }
+          (* So fib (S i1) <= fib i2 *)
+          assert (Hfib_Si1_le_i2: fib (S i1) <= fib i2).
+          { destruct (Nat.eq_dec (S i1) i2) as [Heq' | Hneq'].
+            - rewrite Heq'. lia.
+            - assert (HS_i1_lt_i2: S i1 < i2) by lia.
+              apply Nat.lt_le_incl.
+              apply fib_mono_lt; lia. }
+          (* Combine: sum_list l1 < fib (S i1) <= fib i2 = x2 <= sum_list l2 *)
+          (* But sum_list l1 = sum_list l2 = n, contradiction! *)
+          rewrite <- Heq_i2 in Hfib_Si1_le_i2.
+          assert (Hcontrad: sum_list l1 < sum_list l2).
+          { apply (Nat.lt_le_trans _ (fib (S i1))).
+            - exact Hsum1_bound.
+            - apply (Nat.le_trans _ x2); assumption. }
+          lia.
+
+        - (* Case: x1 > x2 (symmetric to above) *)
+          assert (Hsum2_bound: sum_list l2 < fib (S i2)).
+          { apply (sum_nonconsec_fibs_bounded_sorted i2 xs2); try assumption.
+            - simpl. split; [| exact Hsorted2].
+              destruct xs2 as [|y2 ys2]; [trivial |].
+              simpl in Hsorted2. exact Hsorted2.
+            - intros z Hz. simpl in Hz.
+              destruct Hz as [Hz_eq | Hz_in].
+              + exists i2. split; [exact Hi2_ge | rewrite <- Heq_i2; exact Hz_eq].
+              + apply Hfib2. simpl. right. exact Hz_in. }
+          assert (Hx1_le_sum1: x1 <= sum_list l1).
+          { simpl. lia. }
+          assert (Hi2_lt_i1: i2 < i1).
+          { destruct (Nat.lt_trichotomy i2 i1) as [Hlt' | [Heq' | Hgt']].
+            - exact Hlt'.
+            - exfalso. subst i1. rewrite Heq_i2 in Heq_i1. lia.
+            - exfalso.
+              assert (Hfib_gt: fib i1 < fib i2).
+              { apply fib_mono_lt; try assumption; lia. }
+              lia. }
+          assert (Hfib_Si2_le_i1: fib (S i2) <= fib i1).
+          { destruct (Nat.eq_dec (S i2) i1) as [Heq' | Hneq'].
+            - rewrite Heq'. lia.
+            - assert (HS_i2_lt_i1: S i2 < i1) by lia.
+              apply Nat.lt_le_incl.
+              apply fib_mono_lt; lia. }
+          rewrite <- Heq_i1 in Hfib_Si2_le_i1.
+          assert (Hcontrad: sum_list l2 < sum_list l1).
+          { apply (Nat.lt_le_trans _ (fib (S i2))).
+            - exact Hsum2_bound.
+            - apply (Nat.le_trans _ x1); assumption. }
+          lia. }
+
+      (* Now we have x1 = x2, so we can prove the tails are equal *)
+      subst x2.
+      f_equal.
+
+      (* Apply IH to xs1 and xs2 *)
+      apply (IHn (sum_list xs1)).
+      * (* sum_list xs1 < n *)
+        simpl in Hsum1.
+        assert (Hx1_pos: x1 > 0).
+        { rewrite <- Heq_i1. apply fib_pos. lia. }
+        lia.
+      * (* xs1 is sorted *)
+        destruct xs1 as [|y1 ys1]; [simpl; trivial |].
+        simpl in Hsorted1. exact Hsorted1.
+      * (* xs2 is sorted *)
+        destruct xs2 as [|y2 ys2]; [simpl; trivial |].
+        simpl in Hsorted2. exact Hsorted2.
+      * (* no_consecutive_fibs_sorted xs1 *)
+        destruct xs1 as [|y1 ys1]; [simpl; trivial |].
+        simpl in Hnocons1. destruct Hnocons1 as [_ Htail]. exact Htail.
+      * (* no_consecutive_fibs_sorted xs2 *)
+        destruct xs2 as [|y2 ys2]; [simpl; trivial |].
+        simpl in Hnocons2. destruct Hnocons2 as [_ Htail]. exact Htail.
+      * (* All elements in xs1 are Fibs with indices >= 2 *)
+        intros z Hz. apply Hfib1. simpl. right. exact Hz.
+      * (* All elements in xs2 are Fibs with indices >= 2 *)
+        intros z Hz. apply Hfib2. simpl. right. exact Hz.
+      * (* sum_list xs1 = sum_list xs1 *)
+        reflexivity.
+      * (* sum_list xs2 = sum_list xs1 *)
+        simpl in Hsum1, Hsum2.
+        lia.
+Qed.
+
+(*
+  Helper lemmas to simplify application of zeckendorf_unique_sorted
+*)
+
+(*
+  Lemma: Sum of a reversed list equals sum of the original list
+*)
+Lemma sum_list_rev : forall l,
+  sum_list (rev l) = sum_list l.
+Proof.
+  induction l as [|x xs IH].
+  - simpl. reflexivity.
+  - simpl. rewrite sum_list_app. simpl.
+    rewrite Nat.add_0_r. rewrite IH. lia.
+Qed.
+
+(*
+  Helper: sum_list distributes over append
+*)
+Lemma sum_list_app : forall l1 l2,
+  sum_list (l1 ++ l2) = sum_list l1 + sum_list l2.
+Proof.
+  induction l1 as [|x xs IH]; intro l2.
+  - simpl. reflexivity.
+  - simpl. rewrite IH. lia.
+Qed.
+
+(*
+  Lemma: Reversal preserves no_consecutive_fibs property
+
+  If a list has no consecutive Fibonacci numbers, then its reversal
+  also has no consecutive Fibonacci numbers.
+*)
+Lemma rev_preserves_no_consecutive : forall l,
+  no_consecutive_fibs l ->
+  no_consecutive_fibs (rev l).
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    intro. simpl. trivial.
+  - (* l = x :: xs *)
+    intro Hnocons.
+    simpl.
+    simpl in Hnocons.
+    destruct Hnocons as [Hhead Htail].
+    (* rev (x :: xs) = rev xs ++ [x] *)
+    (* Need to show no_consecutive_fibs (rev xs ++ [x]) *)
+    apply no_consecutive_append_single.
+    + (* no_consecutive_fibs (rev xs) by IH *)
+      apply IH. exact Htail.
+    + (* Show x is not consecutive with any element in rev xs *)
+      intros y Hy_in i j Heq_i Heq_j Hcons.
+      (* y is in rev xs, so y is in xs *)
+      apply in_rev in Hy_in.
+      (* Apply Hhead with y from xs *)
+      apply (Hhead y Hy_in i j Heq_i Heq_j Hcons).
+Qed.
+
+(*
+  Conversion lemma: no_consecutive_fibs implies no_consecutive_fibs_sorted for sorted lists
+
+  For a descending-sorted list, if no two elements are consecutive Fibonacci numbers
+  (in the general sense), then adjacent elements are also not consecutive.
+*)
+Lemma no_consecutive_to_sorted : forall l,
+  Sorted_dec l ->
+  no_consecutive_fibs l ->
+  no_consecutive_fibs_sorted l.
+Proof.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    intros _ _. simpl. trivial.
+  - (* l = x :: xs *)
+    intros Hsorted Hnocons.
+    destruct xs as [|y ys].
+    + (* xs = [] *)
+      simpl. trivial.
+    + (* xs = y :: ys *)
+      simpl.
+      split.
+      * (* Adjacent elements x and y are not consecutive *)
+        intros i j Heq_i Heq_j Hcons.
+        simpl in Hnocons.
+        destruct Hnocons as [Hhead _].
+        apply (Hhead y).
+        -- simpl. left. reflexivity.
+        -- exact Heq_i.
+        -- exact Heq_j.
+        -- exact Hcons.
+      * (* Recursively show tail is sorted *)
+        apply IH.
+        -- apply sorted_tail. exact Hsorted.
+        -- simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
+Qed.
+
+(*
+  Lemma: Elements in zeckendorf output have Fibonacci indices >= 2
+
+  This strengthens zeckendorf_fib_property to show that not only are all
+  elements Fibonacci numbers, but they have indices >= 2, which excludes
+  fib(0) = 0 and fib(1) = 1.
+
+  This is important for Zeckendorf representations since we typically start
+  from fib(2) = 1 to avoid the ambiguity that fib(1) = fib(2) = 1.
+*)
+Lemma zeckendorf_fib_indices_ge_2 : forall n z,
+  In z (zeckendorf n []) ->
+  exists k, k >= 2 /\ fib k = z.
+Proof.
+  intros n z Hz.
+  (* Get that z is a Fibonacci number *)
+  assert (Hfib: exists k, fib k = z).
+  { apply zeckendorf_fib_property. exact Hz. }
+  destruct Hfib as [k Heq_k].
+
+  (* We need to show k >= 2 *)
+  (* Strategy: show z > 0, which rules out k = 0 *)
+  (* Then show z <> 1 or handle z = 1 case carefully *)
+
+  (* For now, we admit this - it requires analyzing the algorithm more carefully *)
+  (* The algorithm starts from fibs_upto which uses seq 1 (S n), so indices start at 1 *)
+  (* But we'd need to prove it never picks fib(1) = 1 or fib(0) = 0 *)
+  exists k. split.
+  - admit. (* TODO: Prove k >= 2 by analyzing fibs_upto and the greedy selection *)
+  - exact Heq_k.
+Admitted.
+
+(*
+  Corollary: Easier application of uniqueness for zeckendorf_sorted outputs
+
+  This provides a more convenient form for proving that two uses of zeckendorf_sorted
+  with the same sum produce the same result, assuming the sorted property holds.
+*)
+Corollary zeckendorf_sorted_unique : forall n,
+  Sorted_dec (zeckendorf_sorted n) ->
+  forall l,
+    Sorted_dec l ->
+    no_consecutive_fibs l ->
+    (forall x, In x l -> exists k, k >= 2 /\ fib k = x) ->
+    sum_list l = n ->
+    l = zeckendorf_sorted n.
+Proof.
+  intros n Hsorted_zeck l Hsorted_l Hnocons_l Hfib_l Hsum_l.
+
+  (* Apply zeckendorf_unique_sorted *)
+  apply zeckendorf_unique_sorted with (n := n).
+  - (* Sorted_dec l *)
+    exact Hsorted_l.
+  - (* Sorted_dec (zeckendorf_sorted n) *)
+    exact Hsorted_zeck.
+  - (* no_consecutive_fibs_sorted l *)
+    apply no_consecutive_to_sorted; assumption.
+  - (* no_consecutive_fibs_sorted (zeckendorf_sorted n) *)
+    apply no_consecutive_to_sorted.
+    + exact Hsorted_zeck.
+    + unfold zeckendorf_sorted.
+      (* Reversal preserves no_consecutive_fibs *)
+      apply rev_preserves_no_consecutive.
+      apply zeckendorf_no_consecutive.
+  - (* All elements in l have indices >= 2 *)
+    exact Hfib_l.
+  - (* All elements in zeckendorf_sorted n have indices >= 2 *)
+    intros x Hx.
+    unfold zeckendorf_sorted in Hx.
+    apply in_rev in Hx.
+    apply zeckendorf_fib_indices_ge_2.
+    exact Hx.
+  - (* sum_list l = n *)
+    exact Hsum_l.
+  - (* sum_list (zeckendorf_sorted n) = n *)
+    unfold zeckendorf_sorted.
+    rewrite sum_list_rev.
+    apply zeckendorf_sum_property.
+Admitted. (* Has admits in proof *)
 
 (*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
