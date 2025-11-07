@@ -3281,7 +3281,7 @@ Proof.
     unfold zeckendorf_sorted.
     rewrite sum_list_rev.
     apply zeckendorf_sum_property.
-Admitted. (* Has admits in proof *)
+Qed.
 
 (*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
