@@ -2236,7 +2236,7 @@ Proof.
         (* Now goal is: sum_list (y :: ys) < fib (S (S k''')) *)
         (* Combine: sum_list (y :: ys) < fib (S j) <= fib (S (S k''')) *)
         apply (Nat.lt_le_trans _ (fib (S j))); [exact Hsum_bound | exact Hfib_Sj_le].
-Admitted.
+Qed.
 
 (*
   ==============================================================================
@@ -2700,3 +2700,4 @@ Proof.
   - (* Part 3: No consecutive Fibonacci numbers *)
     apply zeckendorf_no_consecutive.
 Qed.
+Print Assumptions zeckendorf_is_the_unique_repr.
