@@ -113,6 +113,7 @@ When modifying proofs:
 1. Use `coqtop` or `coqide` for interactive proof development
 2. The file uses standard library modules: `Lists.List`, `Arith.Arith`, `Wellfounded.*`
 3. Rely on `Program Fixpoint` for measure-based recursion
+4. **IMPORTANT**: Always test compile after making changes using `cd Coq && make` to ensure the entire development remains valid
 
 ## Important Notes
 

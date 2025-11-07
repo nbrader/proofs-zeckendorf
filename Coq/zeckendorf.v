@@ -936,14 +936,14 @@ Proof.
       subst y.
       destruct zs as [|w ws].
       * (* zs = [] *)
-        simpl in Hsorted. exact Hsorted.
+        simpl in Hsorted. destruct Hsorted as [Hz _]. exact Hz.
       * (* zs = w :: ws *)
-        simpl in Hsorted. destruct Hsorted as [_ Htail].
-        apply IH in Htail.
-        -- assert (Hw_gt_x: w > x).
-           { apply Htail. left. reflexivity. }
-           lia.
-        -- left. reflexivity.
+        simpl in Hsorted. destruct Hsorted as [Hz_gt_w Htail].
+        (* Use IH to show w > x *)
+        assert (Hw_gt_x: w > x).
+        { apply (IH x Htail w). left. reflexivity. }
+        (* Then z > w > x implies z > x *)
+        lia.
     + (* y in zs *)
       destruct zs as [|w ws].
       * (* zs = [] *)
@@ -1004,8 +1004,11 @@ Proof.
         (* 2. All elements in rev (y :: ys) are > x *)
         simpl. split.
         -- (* x < y *)
-           apply sorted_dec_app_singleton_inv with (l := rev (y :: ys)) in H.
-           apply H. apply in_rev. left. reflexivity.
+           assert (Hall_gt_x: forall z, In z (rev (y :: ys)) -> z > x).
+           { apply sorted_dec_app_singleton_inv. exact H. }
+           assert (Hy_in_rev: In y (rev (y :: ys))).
+           { apply -> in_rev. simpl. left. reflexivity. }
+           apply (Hall_gt_x y Hy_in_rev).
         -- (* Sorted_asc (y :: ys) *)
            (* First extract Sorted_dec (rev (y :: ys)) from H *)
            assert (Hsorted_rev: Sorted_dec (rev (y :: ys))).
@@ -1016,7 +1019,7 @@ Proof.
                + simpl in H. destruct H as [Hzw Htail].
                  simpl. split.
                  * exact Hzw.
-                 * apply IH2. exact Htail. }
+                 * apply (IH2 x). exact Htail. }
            apply IH. exact Hsorted_rev.
 Qed.
 
@@ -2347,6 +2350,31 @@ Qed.
   NOTE: This original version has been superseded by sum_nonconsec_fibs_bounded_sorted
   above, which is much simpler. This version is kept for reference.
 *)
+
+(*
+  Helper lemma: Any Fibonacci number >= 1 has an index >= 2
+
+  This is because fib(0) = 0, fib(1) = fib(2) = 1, and for any fib(k) >= 1,
+  we can find an index >= 2 that produces the same value.
+*)
+Lemma fib_value_has_index_ge_2 : forall k,
+  fib k >= 1 ->
+  exists k', k' >= 2 /\ fib k' = fib k.
+Proof.
+  intros k Hge.
+  destruct k as [|[|k']].
+  - (* k = 0: fib(0) = 0, contradicts fib(k) >= 1 *)
+    simpl in Hge. lia.
+  - (* k = 1: fib(1) = 1 = fib(2), so use k' = 2 *)
+    exists 2. split.
+    + lia.
+    + simpl. reflexivity.
+  - (* k = S (S k'): k >= 2, so use k' = k *)
+    exists (S (S k')). split.
+    + lia.
+    + reflexivity.
+Qed.
+
 Lemma sum_nonconsec_fibs_bounded : forall l k,
   k >= 2 ->
   NoDup l ->
@@ -2699,8 +2727,12 @@ Proof.
             }
             (* Now use fib_value_has_index_ge_2 to get an index >= 2 *)
             assert (Hm_ge_2: exists m, m >= 2 /\ fib m = max_xs).
-            { rewrite <- Hm_eq in Hmax_xs_pos.
-              apply fib_value_has_index_ge_2. exact Hmax_xs_pos. }
+            { assert (Hfib_m_initial: fib m_initial >= 1).
+              { rewrite Hm_eq. exact Hmax_xs_pos. }
+              destruct (fib_value_has_index_ge_2 m_initial Hfib_m_initial) as [m' [Hm'_ge Hm'_eq]].
+              exists m'. split.
+              - exact Hm'_ge.
+              - rewrite <- Hm_eq. exact Hm'_eq. }
             destruct Hm_ge_2 as [m [Hm_ge2 Hm_eq']].
             (* Now show m <= k - 2 *)
             (* We have fib m = max_xs = fib m_initial, so we need m <= k - 2 *)
@@ -2885,7 +2917,6 @@ Proof.
     + (* l2 = [], but l1 is non-empty with sum n *)
       (* Similar contradiction as above *)
       exfalso.
-      simpl in Hsum2. subst n.
       assert (Hx1_fib: exists i, i >= 2 /\ fib i = x1).
       { apply Hfib1. simpl. left. reflexivity. }
       destruct Hx1_fib as [i [Hi_ge Heq_i]].
@@ -2896,6 +2927,11 @@ Proof.
         - assert (Hfib_ge: fib i >= fib 2).
           { apply Nat.lt_le_incl. apply fib_mono_lt; lia. }
           simpl in Hfib_ge. lia. }
+      simpl in Hsum2.
+      (* Hsum2 : 0 = n, so n = 0 *)
+      (* Hsum1 : sum_list (x1 :: xs1) = n *)
+      (* Therefore sum_list (x1 :: xs1) = 0 *)
+      (* But sum_list (x1 :: xs1) = x1 + sum_list xs1 >= x1 >= 1 *)
       simpl in Hsum1.
       lia.
 
@@ -2917,12 +2953,12 @@ Proof.
         exfalso.
         (* Assume x1 ≠ x2, derive contradiction using sum_nonconsec_fibs_bounded_sorted *)
         (* WLOG, assume x1 < x2 (the other case is symmetric) *)
-        destruct (Nat.lt_gt_cases x1 x2) as [Hlt | Hgt]; [| destruct Hgt as [Hgt | Heq]; [| contradiction]].
-        - (* Case: x1 < x2 *)
+        destruct (Nat.lt_trichotomy x1 x2) as [Hlt | [Heq' | Hgt]].
+        + (* Case: x1 < x2 *)
           (* Since l1 is sorted descending, x1 is the maximum of l1 *)
           (* Since l2 is sorted descending, x2 is the maximum of l2 *)
-          (* We have: sum_list l1 < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
-          assert (Hsum1_bound: sum_list l1 < fib (S i1)).
+          (* We have: sum_list (x1 :: xs1) < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
+          assert (Hsum1_bound: sum_list (x1 :: xs1) < fib (S i1)).
           { apply (sum_nonconsec_fibs_bounded_sorted i1 xs1); try assumption.
             - simpl. split; [| exact Hsorted1].
               (* Need x1 > head of xs1 if xs1 is non-empty *)
@@ -2959,8 +2995,9 @@ Proof.
             - exact Hsum1_bound.
             - apply (Nat.le_trans _ x2); assumption. }
           lia.
-
-        - (* Case: x1 > x2 (symmetric to above) *)
+        + (* Case: x1 = x2 - but we have Hneq : x1 ≠ x2, contradiction *)
+          contradiction.
+        + (* Case: x1 > x2 (symmetric to above) *)
           assert (Hsum2_bound: sum_list l2 < fib (S i2)).
           { apply (sum_nonconsec_fibs_bounded_sorted i2 xs2); try assumption.
             - simpl. split; [| exact Hsorted2].
@@ -3183,30 +3220,6 @@ Proof.
       exact H0.
   }
   lia.
-Qed.
-
-(*
-  Helper lemma: Any Fibonacci number >= 1 has an index >= 2
-
-  This is because fib(0) = 0, fib(1) = fib(2) = 1, and for any fib(k) >= 1,
-  we can find an index >= 2 that produces the same value.
-*)
-Lemma fib_value_has_index_ge_2 : forall k,
-  fib k >= 1 ->
-  exists k', k' >= 2 /\ fib k' = fib k.
-Proof.
-  intros k Hge.
-  destruct k as [|[|k']].
-  - (* k = 0: fib(0) = 0, contradicts fib(k) >= 1 *)
-    simpl in Hge. lia.
-  - (* k = 1: fib(1) = 1 = fib(2), so use k' = 2 *)
-    exists 2. split.
-    + lia.
-    + simpl. reflexivity.
-  - (* k = S (S k'): k >= 2, so use k' = k *)
-    exists (S (S k')). split.
-    + lia.
-    + reflexivity.
 Qed.
 
 (*
