@@ -2700,4 +2700,3 @@ Proof.
   - (* Part 3: No consecutive Fibonacci numbers *)
     apply zeckendorf_no_consecutive.
 Qed.
-Print Assumptions zeckendorf_is_the_unique_repr.
