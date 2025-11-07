@@ -2666,9 +2666,65 @@ Proof.
           assert (Hmax_xs_fib: exists m, m <= S (S (S k''')) - 2 /\ fib m = max_xs /\ m >= 2).
           { assert (Hmax_xs_in: In max_xs (y :: ys)).
             { apply list_max_in. exact Hmax_xs. }
-            destruct (Hxs_bounded max_xs Hmax_xs_in) as [m [Hm_bound Hm_eq]].
-            (* Need to show m >= 2 *)
-            exists m. split; [exact Hm_bound | split; [exact Hm_eq | admit]]. }
+            destruct (Hxs_bounded max_xs Hmax_xs_in) as [m_initial [Hm_bound Hm_eq]].
+            (* Need to show there exists m >= 2 with fib m = max_xs *)
+            (* First show max_xs >= 1 (it's a positive Fibonacci number) *)
+            assert (Hmax_xs_pos: max_xs >= 1).
+            { (* max_xs is in the list, which contains only positive Fibs *)
+              (* All elements come from the original list l which has positive Fibs *)
+              (* We know all elements in l are Fibonacci numbers with indices from fibs_upto *)
+              (* Since k >= 3 (from k = S (S (S k'''))), we have that all Fibs in l are >= 1 *)
+              (* Actually, let's use that fib(m_initial) = max_xs and show m_initial >= 1 implies max_xs >= 1 *)
+              rewrite <- Hm_eq.
+              destruct m_initial as [|m'].
+              - (* m_initial = 0: fib 0 = 0, but max_xs should be positive *)
+                (* This is impossible because elements come from a no_consecutive list *)
+                (* and we know k >= 3, so the list has only positive elements *)
+                (* For now, we'll show this leads to contradiction *)
+                simpl.
+                (* If max_xs = 0, then it's in (y :: ys), and 0 is in l *)
+                (* But l has no_consecutive_fibs and contains fib k where k >= 3 *)
+                (* Having 0 = fib 0 and fib k for k >= 3 doesn't violate no_consecutive *)
+                (* Actually, we need a different approach *)
+                (* Since max_xs is max of non-empty list y::ys, and y is in xs where x = fib k *)
+                (* All elements in xs are < fib k, so they're all positive (since k >= 3) *)
+                (* Actually, we should use that all elements are > 0 *)
+                exfalso.
+                (* max_xs = 0 and max_xs is in (y :: ys) which is part of l *)
+                (* All elements in l are Fibonacci numbers, and we showed earlier that *)
+                (* lists with no_consecutive_fibs and containing fib k for k >= 3 have positive elements *)
+                (* This needs a helper lemma, so let's admit for now and use fib_value_has_index_ge_2 *)
+                admit.
+              - (* m_initial >= 1 *) apply fib_pos. lia.
+            }
+            (* Now use fib_value_has_index_ge_2 to get an index >= 2 *)
+            assert (Hm_ge_2: exists m, m >= 2 /\ fib m = max_xs).
+            { rewrite <- Hm_eq in Hmax_xs_pos.
+              apply fib_value_has_index_ge_2. exact Hmax_xs_pos. }
+            destruct Hm_ge_2 as [m [Hm_ge2 Hm_eq']].
+            (* Now show m <= k - 2 *)
+            (* We have fib m = max_xs = fib m_initial, so we need m <= k - 2 *)
+            (* From Hm_bound, we know m_initial <= k - 2 *)
+            (* We need to show that m (the new index >= 2) is also <= k - 2 *)
+            exists m. split.
+            - (* m <= k - 2 *)
+              (* We have fib m = fib m_initial and both m >= 2 and m_initial <= k - 2 *)
+              (* If m > k - 2, then m >= k - 1 *)
+              (* Need to show this is impossible *)
+              (* Actually, we need to be more careful *)
+              (* fib m = max_xs = fib m_initial *)
+              (* If m <> m_initial, then we have two different indices giving the same Fib value *)
+              (* This only happens for fib 1 = fib 2 = 1 *)
+              (* So either m = m_initial, or {m, m_initial} = {1, 2} *)
+              (* If m = m_initial, then m <= k - 2 by Hm_bound *)
+              (* If {m, m_initial} = {1, 2}, then m = 2 (since m >= 2), and m_initial = 1 *)
+              (* Then m = 2 <= k - 2, which requires k >= 4 *)
+              (* We have k = S (S (S k''')), so k >= 3 *)
+              (* Hmm, if k = 3, then k - 2 = 1, and m = 2 > 1, which violates the bound *)
+              (* Let me reconsider... *)
+              admit. (* TODO: Need to handle the case where k = 3 and max_xs = 1 *)
+            - split; [exact Hm_eq' | exact Hm_ge2].
+          }
 
           destruct Hmax_xs_fib as [m [Hm_le [Hm_eq Hm_ge]]].
 
@@ -3067,6 +3123,93 @@ Proof.
 Qed.
 
 (*
+  Lemma: zeckendorf_fuel only produces positive elements
+
+  This shows that all elements in the output of zeckendorf_fuel are positive,
+  provided all elements in acc are positive. Since we start with acc = [],
+  this means zeckendorf never produces 0.
+*)
+Lemma zeckendorf_fuel_all_pos : forall fuel n acc,
+  (forall x, In x acc -> x > 0) ->
+  forall x, In x (zeckendorf_fuel fuel n acc) -> x > 0.
+Proof.
+  induction fuel as [|fuel' IH].
+  - (* fuel = 0: returns acc *)
+    intros n acc Hacc_pos x Hx.
+    simpl in Hx. apply Hacc_pos. exact Hx.
+  - (* fuel = S fuel' *)
+    intros n acc Hacc_pos x Hx.
+    destruct n as [|n'].
+    + (* n = 0: returns acc *)
+      simpl in Hx. apply Hacc_pos. exact Hx.
+    + (* n = S n' *)
+      simpl in Hx.
+      destruct (rev (fibs_upto (S n'))) as [|y ys] eqn:Heq.
+      * (* fibs_upto is empty: returns acc *)
+        apply Hacc_pos. exact Hx.
+      * (* fibs_upto is y :: ... after reversing *)
+        destruct (Nat.leb y (S n')) eqn:Hleb.
+        -- (* y <= n: recurse with y :: acc *)
+          apply IH with (acc := y :: acc) (n := S n' - y).
+          ++ (* Show y :: acc has all positive elements *)
+            intros z Hz. simpl in Hz. destruct Hz as [Heq_z | Hin_acc].
+            ** (* z = y: show y > 0 *)
+              subst z.
+              (* y is in rev (fibs_upto (S n')), so y is in fibs_upto (S n') *)
+              assert (Hy_in: In y (fibs_upto (S n'))).
+              { apply in_rev. rewrite Heq. left. reflexivity. }
+              apply in_fibs_upto_pos. exact Hy_in.
+            ** (* z is in acc *)
+              apply Hacc_pos. exact Hin_acc.
+          ++ (* x is in the result *)
+            exact Hx.
+        -- (* y > n: returns acc *)
+          apply Hacc_pos. exact Hx.
+Qed.
+
+(*
+  Corollary: zeckendorf never produces 0
+*)
+Lemma zeckendorf_no_zero : forall n,
+  ~ In 0 (zeckendorf n []).
+Proof.
+  intros n H0.
+  unfold zeckendorf in H0.
+  assert (H_pos: 0 > 0).
+  { apply zeckendorf_fuel_all_pos with (fuel := n) (n := n) (acc := []).
+    - (* Empty list has all positive elements (vacuously) *)
+      intros x Hx. inversion Hx.
+    - (* 0 is in the result *)
+      exact H0.
+  }
+  lia.
+Qed.
+
+(*
+  Helper lemma: Any Fibonacci number >= 1 has an index >= 2
+
+  This is because fib(0) = 0, fib(1) = fib(2) = 1, and for any fib(k) >= 1,
+  we can find an index >= 2 that produces the same value.
+*)
+Lemma fib_value_has_index_ge_2 : forall k,
+  fib k >= 1 ->
+  exists k', k' >= 2 /\ fib k' = fib k.
+Proof.
+  intros k Hge.
+  destruct k as [|[|k']].
+  - (* k = 0: fib(0) = 0, contradicts fib(k) >= 1 *)
+    simpl in Hge. lia.
+  - (* k = 1: fib(1) = 1 = fib(2), so use k' = 2 *)
+    exists 2. split.
+    + lia.
+    + simpl. reflexivity.
+  - (* k = S (S k'): k >= 2, so use k' = k *)
+    exists (S (S k')). split.
+    + lia.
+    + reflexivity.
+Qed.
+
+(*
   Lemma: Elements in zeckendorf output have Fibonacci indices >= 2
 
   This strengthens zeckendorf_fib_property to show that not only are all
@@ -3086,17 +3229,30 @@ Proof.
   { apply zeckendorf_fib_property. exact Hz. }
   destruct Hfib as [k Heq_k].
 
-  (* We need to show k >= 2 *)
-  (* Strategy: show z > 0, which rules out k = 0 *)
-  (* Then show z <> 1 or handle z = 1 case carefully *)
+  (* Show that z >= 1, which allows us to use fib_value_has_index_ge_2 *)
+  assert (Hz_ge: z >= 1).
+  { (* Elements in zeckendorf output are positive, and positive nats are >= 1 *)
+    assert (Hz_pos: z > 0).
+    { (* Use zeckendorf_no_zero to show z <> 0, and since fib(k) = z, we know z > 0 *)
+      destruct k as [|k'].
+      - (* k = 0: fib(0) = 0 = z *)
+        simpl in Heq_k. subst z.
+        (* But 0 is not in zeckendorf n [] by zeckendorf_no_zero *)
+        exfalso. apply zeckendorf_no_zero with (n := n). exact Hz.
+      - (* k = S k': k >= 1, so fib(k) > 0 *)
+        rewrite <- Heq_k.
+        apply fib_pos. lia.
+    }
+    lia.
+  }
 
-  (* For now, we admit this - it requires analyzing the algorithm more carefully *)
-  (* The algorithm starts from fibs_upto which uses seq 1 (S n), so indices start at 1 *)
-  (* But we'd need to prove it never picks fib(1) = 1 or fib(0) = 0 *)
-  exists k. split.
-  - admit. (* TODO: Prove k >= 2 by analyzing fibs_upto and the greedy selection *)
-  - exact Heq_k.
-Admitted.
+  (* Now use the helper lemma *)
+  apply fib_value_has_index_ge_2 in Hz_ge.
+  destruct Hz_ge as [k' [Hk'_ge Heq_k']].
+  exists k'. split.
+  - exact Hk'_ge.
+  - rewrite <- Heq_k. exact Heq_k'.
+Qed.
 
 (*
   Corollary: Easier application of uniqueness for zeckendorf_sorted outputs
