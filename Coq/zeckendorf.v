@@ -902,6 +902,57 @@ Proof.
       apply (IH w y Hrest z Hin).
 Qed.
 
+(* Helper: In an ascending sorted list, head is less than all elements in tail *)
+Lemma sorted_asc_head_lt_tail : forall y ys z,
+  Sorted_asc (y :: ys) ->
+  In z ys ->
+  y < z.
+Proof.
+  intros y ys. revert y. induction ys as [|w ws IH]; intros y z Hsorted Hz.
+  - (* ys = [] *)
+    simpl in Hz. contradiction.
+  - (* ys = w :: ws *)
+    simpl in Hsorted. destruct Hsorted as [Hyw Hrest].
+    simpl in Hz. destruct Hz as [Heq | Hin].
+    + (* z = w *)
+      subst. exact Hyw.
+    + (* z in ws *)
+      assert (Hw_lt_z: w < z).
+      { apply (IH w z Hrest Hin). }
+      lia.
+Qed.
+
+(* Helper: Sorted_dec with appended singleton implies properties about head *)
+Lemma sorted_dec_app_singleton_inv : forall l x,
+  Sorted_dec (l ++ [x]) ->
+  (forall y, In y l -> y > x).
+Proof.
+  induction l as [|z zs IH]; intros x Hsorted y Hy.
+  - (* l = [] *)
+    simpl in Hy. contradiction.
+  - (* l = z :: zs *)
+    simpl in Hy. destruct Hy as [Heq | Hin].
+    + (* y = z *)
+      subst y.
+      destruct zs as [|w ws].
+      * (* zs = [] *)
+        simpl in Hsorted. exact Hsorted.
+      * (* zs = w :: ws *)
+        simpl in Hsorted. destruct Hsorted as [_ Htail].
+        apply IH in Htail.
+        -- assert (Hw_gt_x: w > x).
+           { apply Htail. left. reflexivity. }
+           lia.
+        -- left. reflexivity.
+    + (* y in zs *)
+      destruct zs as [|w ws].
+      * (* zs = [] *)
+        simpl in Hin. contradiction.
+      * (* zs = w :: ws *)
+        simpl in Hsorted. destruct Hsorted as [_ Htail].
+        apply IH; assumption.
+Qed.
+
 (* Helper: Reversal interchanges ascending and descending sorted *)
 Lemma rev_sorted_asc_dec : forall l,
   Sorted_asc l <-> Sorted_dec (rev l).
@@ -939,14 +990,35 @@ Proof.
               (* From Sorted_asc (y :: ys), we have y < ... < z *)
               (* Combined with x < y, we get x < z *)
               assert (Hy_lt_z: y < z).
-              { (* TODO: Need to extract this from Sorted_asc (y :: ys) and In z ys *)
-                admit. }
+              { apply (sorted_asc_head_lt_tail y ys z Hrest Hin). }
               lia.
     + (* Sorted_dec (rev (x :: xs)) -> Sorted_asc (x :: xs) *)
-      (* TODO: This direction is less critical for our purposes - we mainly need *)
-      (* to prove that zeckendorf produces Sorted_asc, then convert via forward direction *)
-      admit.
-Admitted.  (* TODO: Complete the reverse direction when needed *)
+      simpl (rev (x :: xs)) in H.
+      destruct xs as [|y ys].
+      * (* xs = [] *)
+        simpl. auto.
+      * (* xs = y :: ys *)
+        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
+        (* From Sorted_dec (rev (y :: ys) ++ [x]), we can show: *)
+        (* 1. Sorted_dec (rev (y :: ys)) -> Sorted_asc (y :: ys) by IH *)
+        (* 2. All elements in rev (y :: ys) are > x *)
+        simpl. split.
+        -- (* x < y *)
+           apply sorted_dec_app_singleton_inv with (l := rev (y :: ys)) in H.
+           apply H. apply in_rev. left. reflexivity.
+        -- (* Sorted_asc (y :: ys) *)
+           (* First extract Sorted_dec (rev (y :: ys)) from H *)
+           assert (Hsorted_rev: Sorted_dec (rev (y :: ys))).
+           { clear IH. revert x H. induction (rev (y :: ys)) as [|z zs IH2].
+             - simpl. auto.
+             - intros x H. destruct zs as [|w ws].
+               + simpl. auto.
+               + simpl in H. destruct H as [Hzw Htail].
+                 simpl. split.
+                 * exact Hzw.
+                 * apply IH2. exact Htail. }
+           apply IH. exact Hsorted_rev.
+Qed.
 
 (*
   Key theorem: zeckendorf produces sorted output in ascending order
@@ -956,6 +1028,11 @@ Admitted.  (* TODO: Complete the reverse direction when needed *)
 
   Combined with rev_sorted_asc_dec, this means zeckendorf_sorted produces
   descending sorted output suitable for use with our Sorted_dec proofs.
+
+  TODO: This proof requires showing that the greedy algorithm maintains the
+  sorted property by always prepending elements smaller than those already in
+  the accumulator. The key insight is that as n decreases, the largest Fibonacci
+  number <= n also decreases, using the remainder_less_than_prev_fib lemma.
 *)
 Lemma zeckendorf_produces_sorted_asc : forall n acc,
   Sorted_asc acc ->
