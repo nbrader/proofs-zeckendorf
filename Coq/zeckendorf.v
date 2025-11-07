@@ -984,7 +984,7 @@ Proof.
     simpl. auto.
   - (* acc = [] satisfies the condition *)
     left. reflexivity.
-Admitted.  (* TODO: Relies on zeckendorf_produces_sorted_asc being proved *)
+Qed.  (* TODO: Relies on zeckendorf_produces_sorted_asc being proved *)
 
 (*
   Helper lemma: fuel-based version of non-consecutive property
