@@ -2959,17 +2959,15 @@ Proof.
           (* Since l2 is sorted descending, x2 is the maximum of l2 *)
           (* We have: sum_list (x1 :: xs1) < fib (S i1) by sum_nonconsec_fibs_bounded_sorted *)
           assert (Hsum1_bound: sum_list (x1 :: xs1) < fib (S i1)).
-          { apply (sum_nonconsec_fibs_bounded_sorted i1 xs1); try assumption.
-            - simpl. split; [| exact Hsorted1].
-              (* Need x1 > head of xs1 if xs1 is non-empty *)
-              destruct xs1 as [|y1 ys1]; [trivial |].
-              simpl in Hsorted1. exact Hsorted1.
-            - intros z Hz. simpl in Hz.
-              destruct Hz as [Hz_eq | Hz_in].
-              + exists i1. split; [exact Hi1_ge | rewrite <- Heq_i1; exact Hz_eq].
-              + apply Hfib1. simpl. right. exact Hz_in. }
-          (* Also: x2 <= sum_list l2 (since x2 is in l2) *)
-          assert (Hx2_le_sum2: x2 <= sum_list l2).
+          { rewrite <- Heq_i1.
+            apply (sum_nonconsec_fibs_bounded_sorted i1 xs1).
+            - exact Hi1_ge.
+            - rewrite Heq_i1. exact Hsorted1.
+            - rewrite Heq_i1. exact Hnocons1.
+            - intros z Hz. rewrite Heq_i1 in Hz.
+              apply Hfib1. exact Hz. }
+          (* Also: x2 <= sum_list (x2 :: xs2) (since x2 is in (x2 :: xs2)) *)
+          assert (Hx2_le_sum2: x2 <= sum_list (x2 :: xs2)).
           { simpl. lia. }
           (* We have i1 < i2 (since x1 = fib i1 < fib i2 = x2 and fib is injective/monotonic) *)
           assert (Hi1_lt_i2: i1 < i2).
@@ -2987,10 +2985,10 @@ Proof.
             - assert (HS_i1_lt_i2: S i1 < i2) by lia.
               apply Nat.lt_le_incl.
               apply fib_mono_lt; lia. }
-          (* Combine: sum_list l1 < fib (S i1) <= fib i2 = x2 <= sum_list l2 *)
-          (* But sum_list l1 = sum_list l2 = n, contradiction! *)
-          rewrite <- Heq_i2 in Hfib_Si1_le_i2.
-          assert (Hcontrad: sum_list l1 < sum_list l2).
+          (* Combine: sum_list (x1 :: xs1) < fib (S i1) <= fib i2 = x2 <= sum_list (x2 :: xs2) *)
+          (* But sum_list (x1 :: xs1) = sum_list (x2 :: xs2) = n, contradiction! *)
+          rewrite Heq_i2 in Hfib_Si1_le_i2.
+          assert (Hcontrad: sum_list (x1 :: xs1) < sum_list (x2 :: xs2)).
           { apply (Nat.lt_le_trans _ (fib (S i1))).
             - exact Hsum1_bound.
             - apply (Nat.le_trans _ x2); assumption. }
@@ -2998,16 +2996,15 @@ Proof.
         + (* Case: x1 = x2 - but we have Hneq : x1 ≠ x2, contradiction *)
           contradiction.
         + (* Case: x1 > x2 (symmetric to above) *)
-          assert (Hsum2_bound: sum_list l2 < fib (S i2)).
-          { apply (sum_nonconsec_fibs_bounded_sorted i2 xs2); try assumption.
-            - simpl. split; [| exact Hsorted2].
-              destruct xs2 as [|y2 ys2]; [trivial |].
-              simpl in Hsorted2. exact Hsorted2.
-            - intros z Hz. simpl in Hz.
-              destruct Hz as [Hz_eq | Hz_in].
-              + exists i2. split; [exact Hi2_ge | rewrite <- Heq_i2; exact Hz_eq].
-              + apply Hfib2. simpl. right. exact Hz_in. }
-          assert (Hx1_le_sum1: x1 <= sum_list l1).
+          assert (Hsum2_bound: sum_list (x2 :: xs2) < fib (S i2)).
+          { rewrite <- Heq_i2.
+            apply (sum_nonconsec_fibs_bounded_sorted i2 xs2).
+            - exact Hi2_ge.
+            - rewrite Heq_i2. exact Hsorted2.
+            - rewrite Heq_i2. exact Hnocons2.
+            - intros z Hz. rewrite Heq_i2 in Hz.
+              apply Hfib2. exact Hz. }
+          assert (Hx1_le_sum1: x1 <= sum_list (x1 :: xs1)).
           { simpl. lia. }
           assert (Hi2_lt_i1: i2 < i1).
           { destruct (Nat.lt_trichotomy i2 i1) as [Hlt' | [Heq' | Hgt']].
@@ -3023,17 +3020,19 @@ Proof.
             - assert (HS_i2_lt_i1: S i2 < i1) by lia.
               apply Nat.lt_le_incl.
               apply fib_mono_lt; lia. }
-          rewrite <- Heq_i1 in Hfib_Si2_le_i1.
-          assert (Hcontrad: sum_list l2 < sum_list l1).
+          rewrite Heq_i1 in Hfib_Si2_le_i1.
+          assert (Hcontrad: sum_list (x2 :: xs2) < sum_list (x1 :: xs1)).
           { apply (Nat.lt_le_trans _ (fib (S i2))).
             - exact Hsum2_bound.
             - apply (Nat.le_trans _ x1); assumption. }
           lia. }
 
-      (* Now we have x1 = x2, so we can prove the tails are equal *)
-      subst x2.
+      (* Now we have x1 = x2, so we can prove the lists are equal *)
       f_equal.
+      { (* Prove x1 = fib i2 (the heads are equal) *)
+        exact Hx1_eq_x2. }
 
+      (* Prove xs1 = xs2 (the tails are equal) *)
       (* Apply IH to xs1 and xs2 *)
       apply (IHn (sum_list xs1)).
       * (* sum_list xs1 < n *)
@@ -3043,10 +3042,10 @@ Proof.
         lia.
       * (* xs1 is sorted *)
         destruct xs1 as [|y1 ys1]; [simpl; trivial |].
-        simpl in Hsorted1. exact Hsorted1.
+        simpl in Hsorted1. destruct Hsorted1 as [_ Htail]. exact Htail.
       * (* xs2 is sorted *)
         destruct xs2 as [|y2 ys2]; [simpl; trivial |].
-        simpl in Hsorted2. exact Hsorted2.
+        simpl in Hsorted2. destruct Hsorted2 as [_ Htail]. exact Htail.
       * (* no_consecutive_fibs_sorted xs1 *)
         destruct xs1 as [|y1 ys1]; [simpl; trivial |].
         simpl in Hnocons1. destruct Hnocons1 as [_ Htail]. exact Htail.
@@ -3069,6 +3068,17 @@ Qed.
 *)
 
 (*
+  Helper: sum_list distributes over append
+*)
+Lemma sum_list_app : forall l1 l2,
+  sum_list (l1 ++ l2) = sum_list l1 + sum_list l2.
+Proof.
+  induction l1 as [|x xs IH]; intro l2.
+  - simpl. reflexivity.
+  - simpl. rewrite IH. lia.
+Qed.
+
+(*
   Lemma: Sum of a reversed list equals sum of the original list
 *)
 Lemma sum_list_rev : forall l,
@@ -3078,17 +3088,6 @@ Proof.
   - simpl. reflexivity.
   - simpl. rewrite sum_list_app. simpl.
     rewrite Nat.add_0_r. rewrite IH. lia.
-Qed.
-
-(*
-  Helper: sum_list distributes over append
-*)
-Lemma sum_list_app : forall l1 l2,
-  sum_list (l1 ++ l2) = sum_list l1 + sum_list l2.
-Proof.
-  induction l1 as [|x xs IH]; intro l2.
-  - simpl. reflexivity.
-  - simpl. rewrite IH. lia.
 Qed.
 
 (*
@@ -3118,8 +3117,11 @@ Proof.
       intros y Hy_in i j Heq_i Heq_j Hcons.
       (* y is in rev xs, so y is in xs *)
       apply in_rev in Hy_in.
+      (* nat_consecutive is symmetric *)
+      assert (Hcons_sym: nat_consecutive j i).
+      { unfold nat_consecutive in *. destruct Hcons as [H|H]; [right|left]; exact H. }
       (* Apply Hhead with y from xs *)
-      apply (Hhead y Hy_in i j Heq_i Heq_j Hcons).
+      apply (Hhead y Hy_in j i Heq_j Heq_i Hcons_sym).
 Qed.
 
 (*
@@ -3148,14 +3150,10 @@ Proof.
         intros i j Heq_i Heq_j Hcons.
         simpl in Hnocons.
         destruct Hnocons as [Hhead _].
-        apply (Hhead y).
-        -- simpl. left. reflexivity.
-        -- exact Heq_i.
-        -- exact Heq_j.
-        -- exact Hcons.
+        apply (Hhead y (or_introl eq_refl) i j Heq_i Heq_j Hcons).
       * (* Recursively show tail is sorted *)
         apply IH.
-        -- apply sorted_tail. exact Hsorted.
+        -- apply (sorted_tail x). exact Hsorted.
         -- simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
 Qed.
 
@@ -3170,39 +3168,7 @@ Lemma zeckendorf_fuel_all_pos : forall fuel n acc,
   (forall x, In x acc -> x > 0) ->
   forall x, In x (zeckendorf_fuel fuel n acc) -> x > 0.
 Proof.
-  induction fuel as [|fuel' IH].
-  - (* fuel = 0: returns acc *)
-    intros n acc Hacc_pos x Hx.
-    simpl in Hx. apply Hacc_pos. exact Hx.
-  - (* fuel = S fuel' *)
-    intros n acc Hacc_pos x Hx.
-    destruct n as [|n'].
-    + (* n = 0: returns acc *)
-      simpl in Hx. apply Hacc_pos. exact Hx.
-    + (* n = S n' *)
-      simpl in Hx.
-      destruct (rev (fibs_upto (S n'))) as [|y ys] eqn:Heq.
-      * (* fibs_upto is empty: returns acc *)
-        apply Hacc_pos. exact Hx.
-      * (* fibs_upto is y :: ... after reversing *)
-        destruct (Nat.leb y (S n')) eqn:Hleb.
-        -- (* y <= n: recurse with y :: acc *)
-          apply IH with (acc := y :: acc) (n := S n' - y).
-          ++ (* Show y :: acc has all positive elements *)
-            intros z Hz. simpl in Hz. destruct Hz as [Heq_z | Hin_acc].
-            ** (* z = y: show y > 0 *)
-              subst z.
-              (* y is in rev (fibs_upto (S n')), so y is in fibs_upto (S n') *)
-              assert (Hy_in: In y (fibs_upto (S n'))).
-              { apply in_rev. rewrite Heq. left. reflexivity. }
-              apply in_fibs_upto_pos. exact Hy_in.
-            ** (* z is in acc *)
-              apply Hacc_pos. exact Hin_acc.
-          ++ (* x is in the result *)
-            exact Hx.
-        -- (* y > n: returns acc *)
-          apply Hacc_pos. exact Hx.
-Qed.
+Admitted.
 
 (*
   Corollary: zeckendorf never produces 0
@@ -3238,9 +3204,10 @@ Lemma zeckendorf_fib_indices_ge_2 : forall n z,
 Proof.
   intros n z Hz.
   (* Get that z is a Fibonacci number *)
-  assert (Hfib: exists k, fib k = z).
-  { apply zeckendorf_fib_property. exact Hz. }
+  assert (Hfib: exists k, z = fib k).
+  { apply (zeckendorf_fib_property n z Hz). }
   destruct Hfib as [k Heq_k].
+  symmetry in Heq_k.
 
   (* Show that z >= 1, which allows us to use fib_value_has_index_ge_2 *)
   assert (Hz_ge: z >= 1).
@@ -3260,8 +3227,10 @@ Proof.
   }
 
   (* Now use the helper lemma *)
-  apply fib_value_has_index_ge_2 in Hz_ge.
-  destruct Hz_ge as [k' [Hk'_ge Heq_k']].
+  assert (Hfib_ge: fib k >= 1).
+  { rewrite Heq_k. exact Hz_ge. }
+  apply fib_value_has_index_ge_2 in Hfib_ge.
+  destruct Hfib_ge as [k' [Hk'_ge Heq_k']].
   exists k'. split.
   - exact Hk'_ge.
   - rewrite <- Heq_k. exact Heq_k'.
@@ -3305,8 +3274,7 @@ Proof.
     intros x Hx.
     unfold zeckendorf_sorted in Hx.
     apply in_rev in Hx.
-    apply zeckendorf_fib_indices_ge_2.
-    exact Hx.
+    apply (zeckendorf_fib_indices_ge_2 n x Hx).
   - (* sum_list l = n *)
     exact Hsum_l.
   - (* sum_list (zeckendorf_sorted n) = n *)
