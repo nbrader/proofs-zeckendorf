@@ -1197,10 +1197,11 @@ Proof.
            This means 2 > n, i.e., n < 2. *)
         (* Since n > 0 and 1 <= n, we have n = 1, so n < 2 *)
         assert (Hn_eq_1: n = 1).
-        { (* We know 1 <= n and n > 0 *)
-          (* If n >= 2, then n < fib 3 wouldn't hold as required *)
-          (* So we need to show n = 1 *)
-          admit. (* TODO: prove from structure of fibs_upto that n must be 1 *)
+        { (* We know: 1 <= n, n > 0, and 1 is the largest element in fibs_upto n *)
+          (* If n >= 2, then fib 3 = 2 would be in fibs_upto n *)
+          (* But 1 is the largest, so 2 cannot be in the list *)
+          (* Therefore n < 2, which with 1 <= n gives n = 1 *)
+          admit. (* TODO: formalize the argument that if n >= 2, then 2 ∈ fibs_upto n, contradicting max = 1 *)
         }
         rewrite Hn_eq_1. simpl. lia.
 
@@ -1210,10 +1211,49 @@ Proof.
     + (* fib k <= n *)
       rewrite Hfib_eq. exact Hx_le_n.
     + (* n < fib (S k) *)
-      (* This is the key property: since x is the head of rev (fibs_upto n),
-         and fibs_upto uses takeWhile to stop when fib > n,
-         the next Fibonacci must be > n *)
-      admit. (* Need infrastructure about takeWhile and fibs_upto *)
+      (* Proof by contradiction: if fib(S k) <= n, then fib(S k) would be in fibs_upto n *)
+      (* But x = fib k is the largest element, and fib(S k) > fib k, contradiction *)
+      destruct (Nat.lt_ge_cases n (fib (S k))) as [Hlt | Hge].
+      * (* n < fib (S k): exactly what we need *)
+        exact Hlt.
+      * (* fib (S k) <= n: derive contradiction *)
+        exfalso.
+        (* fib k < fib (S k) by monotonicity *)
+        assert (Hfib_lt: fib k < fib (S k)).
+        { apply fib_mono. exact Hk_ge2. }
+        (* If fib (S k) <= n and S k is in range of seq, then fib (S k) should be in fibs_upto n *)
+        (* First, check if S k is in the range *)
+        assert (HSk_bound: S k <= S n).
+        { (* We need to show k < S n, i.e., k <= n *)
+          (* We have fib k <= n and k >= 2 *)
+          (* For small values of k, this is easy to check *)
+          (* For k = 2: fib 2 = 1 <= n, so 2 <= n when n >= 1 *)
+          (* For k = 3: fib 3 = 2 <= n, so 3 <= n when n >= 2 *)
+          (* In general, fib grows faster than linear, so k <= n for reasonable n *)
+          admit. (* TODO: prove k <= n from fib k <= n and k >= 2 *)
+        }
+        (* Now show fib (S k) is in fibs_upto n *)
+        assert (HfibSk_in: In (fib (S k)) (fibs_upto n)).
+        { unfold fibs_upto.
+          (* S k is in seq 1 (S n) *)
+          assert (HSk_in_seq: In (S k) (seq 1 (S n))).
+          { apply in_seq. lia. }
+          (* So fib (S k) is in map fib (seq 1 (S n)) *)
+          assert (HfibSk_in_map: In (fib (S k)) (map fib (seq 1 (S n)))).
+          { apply in_map. exact HSk_in_seq. }
+          (* And takeWhile includes it since fib (S k) <= n *)
+          admit. (* TODO: prove takeWhile includes elements that satisfy predicate *)
+        }
+        (* But x = fib k is the largest element in fibs_upto n *)
+        (* So all elements <= fib k *)
+        assert (Hall_le: forall y, In y (fibs_upto n) -> y <= fib k).
+        { admit. (* TODO: prove all elements in fibs_upto n are <= x when x is max *)
+        }
+        (* Apply to fib (S k) *)
+        assert (Hcontra: fib (S k) <= fib k).
+        { apply Hall_le. exact HfibSk_in. }
+        (* But we have fib k < fib (S k), contradiction *)
+        lia.
 Admitted.
 
 (* Stronger lemma with explicit invariant about acc and n *)
