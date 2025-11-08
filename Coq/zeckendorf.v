@@ -37,7 +37,7 @@ Import ListNotations.
      - No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
 
      Main theorem: zeckendorf_is_the_unique_repr
-     Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive)
+     Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty)
 
   2. UNIQUENESS:
      No positive integer has two different Zeckendorf representations.
@@ -591,7 +591,7 @@ Qed.
   Together, these prove that zeckendorf produces a valid Zeckendorf representation.
 
   Main theorem: zeckendorf_is_the_unique_repr (line ~2610)
-  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive at line ~950)
+  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty at line ~980)
 *)
 
 (*
@@ -1103,18 +1103,6 @@ Proof.
            constructor.
 Admitted.
 
-(* General version with accumulator - requires additional invariants *)
-Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
-  no_consecutive_fibs acc ->
-  (forall z, In z acc -> exists k, z = fib k) ->
-  no_consecutive_fibs (zeckendorf_fuel fuel n acc).
-Proof.
-  (* For now, admit the general case. The specialized case above for acc = []
-     is the main use case and demonstrates the proof strategy. To complete the
-     general case, we would need to add an invariant that acc elements are
-     bounded appropriately relative to n. *)
-Admitted.
-
 (*
   Theorem: Non-consecutive property
 
@@ -1128,11 +1116,7 @@ Theorem zeckendorf_no_consecutive : forall n,
 Proof.
   intro n.
   unfold zeckendorf.
-  apply zeckendorf_fuel_no_consecutive.
-  - (* Base case: empty list has no consecutive Fibs *)
-    simpl. trivial.
-  - (* Base case: all elements in [] are Fibonacci numbers (vacuously true) *)
-    intros z Hz. inversion Hz.
+  apply zeckendorf_fuel_no_consecutive_empty.
 Qed.
 
 (*
