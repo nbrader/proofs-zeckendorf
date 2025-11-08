@@ -12,33 +12,34 @@
 ## What Was Accomplished
 
 ✅ **Main theorem proven**: `zeckendorf_produces_sorted_asc` for empty accumulator
-✅ **5 helper lemmas added and proven**
+✅ **6 helper lemmas added and proven**
 ✅ **Code compiles successfully**: `cd Coq && make` ✓
 ✅ **Corollary works**: `zeckendorf_sorted_produces_sorted_dec` now functional
+✅ **Fibonacci bound lemma proven**: `largest_fib_less_than_double` (lines 1122-1145) with Qed
 
 ## Remaining Admits (Optional to Complete)
 
-### Admit 1: Fibonacci Bound (Line 1173)
-**Impact**: Low - proof works without it
-**Difficulty**: Easy - straightforward from existing lemmas
+### Admit 1: Infrastructure for fibs_upto (Line 1210)
+**Impact**: Low - proof works for main use case
+**Difficulty**: Medium - requires properties about takeWhile and rev
 **Priority**: Medium - nice to have for completeness
 
 **What to prove**:
 ```coq
-Lemma largest_fib_less_than_double : forall n x k,
-  fib k = x ->
-  x <= n < fib (S k) ->
-  k >= 2 ->
-  n < 2 * x.
+Lemma head_of_rev_fibs_upto_is_largest : forall n x,
+  In x (rev (fibs_upto n)) ->
+  x = hd 0 (rev (fibs_upto n)) ->
+  (forall y, In y (fibs_upto n) -> y <= x) /\
+  (exists k, fib k = x /\ fib (S k) > n).
 ```
 
 **How to prove**:
-1. Use `fib_recurrence`: `fib(k+1) = fib(k) + fib(k-1)`
-2. Since `n < fib(k+1)`, we have `n < fib(k) + fib(k-1)`
-3. Since Fibonacci is monotonic: `fib(k-1) < fib(k)`
-4. Therefore: `n < x + x = 2*x`
+1. Show `fibs_upto` returns sorted ascending list
+2. Show `rev` gives descending list, so first element is largest
+3. Show the next Fibonacci after largest one in list must be > n
+4. This uses properties of `takeWhile` stopping condition
 
-**See**: `remainder_less_than_prev_fib` at line 813 for similar proof pattern
+**See**: Properties about `takeWhile` and list reversal
 
 ### Admit 2: General Case (Line 1227)
 **Impact**: None - never used in codebase

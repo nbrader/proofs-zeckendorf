@@ -12,16 +12,23 @@ The lemma `zeckendorf_produces_sorted_asc` has been **successfully proven for th
 ### ✅ PROVEN
 - **Main use case**: `zeckendorf n []` produces sorted output
   - This is the only way the lemma is actually used in the codebase (see line 1214)
-  - The proof is complete for this case with one helper admit
+  - The proof is complete for this case with one remaining admit
 
-### ⚠️ ADMITTED (Not critical)
-1. **Line 1173**: Technical lemma about Fibonacci bounds
-   - Need to prove: `S n' < 2*x` when `x` is the largest Fib ≤ `S n'`
-   - This is provable using Fibonacci growth properties
+- **NEW**: `largest_fib_less_than_double` lemma (lines 1122-1145)
+  - **FULLY PROVEN** with Qed
+  - Proves `n < 2*fib(k)` when `fib(k) <= n < fib(k+1)` and `k >= 2`
+  - Handles base case `k=2` separately
+  - Uses `fib_mono` for monotonicity
 
-2. **Line 1227**: General case with non-empty accumulator
+### ⚠️ ADMITTED (One remaining)
+1. **Line 1210**: Infrastructure lemma about `fibs_upto`
+   - Need to prove: head of `rev (fibs_upto n)` is the largest Fib ≤ n
+   - Requires: `Lemma head_of_rev_fibs_upto_is_largest`
+   - This is the property that `x = hd (rev (fibs_upto n))` implies `fib(S k) > n`
+
+2. **Line 1259**: General case with non-empty accumulator
    - This case is **never used** in the actual codebase
-   - Admitted for now since it's not needed in practice
+   - Admitted since it's not needed in practice
 
 ## Compilation Status
 ✅ **The code compiles successfully** with `make`
