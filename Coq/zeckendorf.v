@@ -927,13 +927,55 @@ Admitted.
   ==============================================================================
 *)
 
+(* Helper lemma: if fib k <= n and k >= 1, then fib k is in fibs_upto n *)
+Lemma fib_in_fibs_upto : forall k n,
+  k >= 1 ->
+  fib k <= n ->
+  In (fib k) (fibs_upto n).
+Proof.
+  intros k n Hk_ge Hfib_le.
+  unfold fibs_upto.
+  (* fibs_upto n = takeWhile (fun x => Nat.leb x n) (map fib (seq 1 (S n))) *)
+  (* We need to show fib k is in this list *)
+  (* Since seq 1 (S n) = [1; 2; ...; S n], if k <= S n, then k is in seq 1 (S n) *)
+  (* And since fib k <= n, the takeWhile will include fib k *)
+  admit.
+Admitted.
+
 (* Helper lemma: elements in zeckendorf_fuel result (with empty acc) are bounded by the input n *)
 Lemma zeckendorf_fuel_elements_bounded_empty : forall fuel n x,
   In x (zeckendorf_fuel fuel n []) ->
   x <= n.
 Proof.
-  (* This would follow by induction and using properties of fibs_upto *)
-Admitted.
+  induction fuel as [|fuel' IH]; intros n x Hin.
+  - (* Base case: fuel = 0 *)
+    simpl in Hin. inversion Hin.
+  - (* Inductive case: fuel = S fuel' *)
+    simpl in Hin.
+    destruct n as [|n'].
+    + (* n = 0 *)
+      simpl in Hin. inversion Hin.
+    + (* n = S n' *)
+      destruct (rev (fibs_upto (S n'))) as [|y ys] eqn:Hfibs.
+      * (* fibs_upto is empty *)
+        simpl in Hin. inversion Hin.
+      * (* fibs_upto = rev(...) = y :: ys *)
+        destruct (Nat.leb y (S n')) eqn:Hleb.
+        -- (* y <= S n', so we cons y *)
+           simpl in Hin.
+           destruct Hin as [Hx_eq | Hx_in].
+           ++ (* x = y *)
+              subst x.
+              apply Nat.leb_le. exact Hleb.
+           ++ (* x is in recursive result *)
+              (* The recursive call is on (S n' - y), so x <= S n' - y <= S n' *)
+              assert (Hx_le_rem: x <= S n' - y).
+              { apply IH. exact Hx_in. }
+              apply Nat.leb_le in Hleb.
+              lia.
+        -- (* y > S n', return [] *)
+           simpl in Hin. inversion Hin.
+Qed.
 
 (* Helper lemma: if fib j < fib (k - 1), then k and j are not consecutive *)
 Lemma fib_lt_prev_implies_not_consecutive : forall k j,
@@ -1022,15 +1064,28 @@ Proof.
                     destruct n' as [|n''].
                     + reflexivity.
                     + (* n' = S n'', so S n' = S (S n'') >= 2 *)
-                      (* We'll show that fib 3 = 2 is in fibs_upto (S (S n'')) and is larger than x = 1 *)
-                      (* This contradicts x being the head (largest element) of rev (fibs_upto (S (S n''))) *)
+                      (* We'll show a contradiction: when n >= 2, rev (fibs_upto n) cannot start with 1 *)
+                      (* because 2 would also be in fibs_upto n and would be larger *)
                       exfalso.
-                      (* Key insight: For this case, we need a lemma about fibs_upto structure.
-                         For now, admit this technical detail. The intuition is clear:
-                         - fib 3 = 2 and 2 <= S (S n''), so 2 is in fibs_upto (S (S n''))
-                         - 2 > 1 = x
-                         - Therefore x cannot be the maximum (head of reversed list) *)
-                      admit.
+                      (* Simplest case: n' = S 0 = 1, so S n' = 2 *)
+                      (* We can verify by computation that rev (fibs_upto 2) = [1; 1], wait that's wrong *)
+                      (* Actually fib 1 = fib 2 = 1, so we need to be careful *)
+                      (* Let's use fib 3 = 2 instead *)
+                      (* We have: x = fib 1 = 1, and Hfibs : rev (fibs_upto (S (S n''))) = 1 :: xs *)
+                      (* We'll show 2 is in fibs_upto (S (S n'')) and is in the reversed list before 1 *)
+                      destruct n'' as [|n''''].
+                      * (* n' = 1, so S n' = 2 *)
+                        (* When n = 2: fibs_upto 2 should be [1; 1] since fib 1 = fib 2 = 1 *)
+                        (* Actually, let's check: fib 1 = 1 <= 2, fib 2 = 1 <= 2, fib 3 = 2 <= 2 *)
+                        (* So fibs_upto 2 = [1; 1; 2] and rev [1; 1; 2] = [2; 1; 1] *)
+                        (* Therefore the head should be 2, not 1 *)
+                        (* But Hx says fib 1 = x and Hfibs says rev (...) = x :: xs, so x should be head *)
+                        (* This means x = 2, but fib 1 = 1, contradiction *)
+                        simpl in Hx. simpl in Hfibs.
+                        (* Let me compute fibs_upto 2 *)
+                        admit.
+                      * (* n' >= 2 *)
+                        admit.
                   }
                   subst n'.
                   (* Now S n' = S 0 = 1, so the recursive call is on remainder 0 (since x = 1) *)
