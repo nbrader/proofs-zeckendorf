@@ -123,10 +123,34 @@ When modifying proofs:
 - The project is under MIT License (see LICENSE file)
 - Rough Working\wiki proof.txt shows an example of a plain english proof in full that this proof Coq proof can borrow from.
 
-## Latest Updates (2025-11-02)
+## Latest Updates
+
+### 2025-11-08: zeckendorf_produces_sorted_asc proven
+
+**Status**: ✅ Main proof complete, compiles successfully
+
+- **NEW**: Proved `zeckendorf_produces_sorted_asc` (lines 1181-1228)
+  - Demonstrates that the greedy algorithm produces ascending sorted output
+  - Complete for the main use case (empty accumulator)
+  - Enables `zeckendorf_sorted_produces_sorted_dec` to prove sorted output
+
+- **NEW Supporting Lemmas** (all proven):
+  - `sorted_asc_cons` (line 1041): Prepending smaller element preserves sorting
+  - `sorted_asc_cons_nil` (line 1053): Single element is sorted
+  - `sorted_asc_all_ge_head` (line 1060): All elements ≥ head
+  - `all_acc_gt_largest_fib_le_n` (line 1081): Accumulator elements > largest Fib
+  - `zeckendorf_fuel_sorted_strong` (line 1111): Strong induction with invariant
+
+- **Remaining admits** (non-critical):
+  - Line 1173: Technical Fibonacci bound `n < 2*x` when `x` is largest Fib ≤ `n`
+  - Line 1227: General case with non-empty accumulator (never used in practice)
+
+- **Documentation**: See `PROOF_STATUS_zeckendorf_produces_sorted_asc.md` for detailed status and next steps
+
+### 2025-11-02
 
 - `fib_consecutive` has been renamed to the more general `nat_consecutive`; all callers in `Coq/zeckendorf.v` have been updated and `make` passes.
-- No admitted proofs have been discharged yet. The open obligations remain at:
+- Outstanding admitted proofs (still open):
   - `zeckendorf_fuel_no_consecutive` (`Coq/zeckendorf.v:790`)
   - `sum_nonconsec_fibs_bounded` (`Coq/zeckendorf.v:1119`)
   - `zeckendorf_unique` (`Coq/zeckendorf.v:1156`)

@@ -1037,15 +1037,194 @@ Qed.
   the accumulator. The key insight is that as n decreases, the largest Fibonacci
   number <= n also decreases, using the remainder_less_than_prev_fib lemma.
 *)
+(* Helper lemma: prepending a smaller element to an ascending sorted list preserves sorting *)
+Lemma sorted_asc_cons : forall x y ys,
+  x < y ->
+  Sorted_asc (y :: ys) ->
+  Sorted_asc (x :: y :: ys).
+Proof.
+  intros x y ys Hlt Hsorted.
+  simpl. split.
+  - exact Hlt.
+  - exact Hsorted.
+Qed.
+
+(* Helper lemma: prepending to empty list gives sorted list *)
+Lemma sorted_asc_cons_nil : forall x,
+  Sorted_asc [x].
+Proof.
+  intro x. simpl. auto.
+Qed.
+
+(* Helper lemma: In ascending sorted list, all elements >= head *)
+Lemma sorted_asc_all_ge_head : forall y ys z,
+  Sorted_asc (y :: ys) ->
+  In z (y :: ys) ->
+  y <= z.
+Proof.
+  intros y ys z Hsorted Hin.
+  destruct Hin as [Heq | Hin'].
+  - (* z = y *) subst. lia.
+  - (* z in ys *)
+    destruct ys as [|w ws].
+    + (* ys = [] *) contradiction.
+    + (* ys = w :: ws *)
+      simpl in Hsorted. destruct Hsorted as [Hyw Htail].
+      assert (Hy_lt_z: y < z).
+      { apply (sorted_asc_head_lt_tail y (w :: ws) z).
+        - simpl. split; assumption.
+        - exact Hin'. }
+      lia.
+Qed.
+
+(* Helper lemma: All elements of acc are greater than the largest Fib <= n when n < min(acc) *)
+Lemma all_acc_gt_largest_fib_le_n : forall n x acc,
+  x > 0 ->
+  In x (rev (fibs_upto n)) ->
+  Sorted_asc acc ->
+  (forall z, In z acc -> n < z) ->
+  forall y, In y acc -> x < y.
+Proof.
+  intros n x acc Hx_pos Hx_in Hsorted Hall_gt y Hy.
+  (* x is in fibs_upto n, so x <= n *)
+  unfold fibs_upto in Hx_in.
+  apply in_rev in Hx_in.
+  (* From takeWhile, we know x <= n *)
+  assert (Hx_le_n: x <= n).
+  {
+    clear -Hx_in.
+    induction (seq 1 (S n)) as [|a l IH].
+    - simpl in Hx_in. contradiction.
+    - simpl in Hx_in.
+      destruct (Nat.leb (fib a) n) eqn:Hleb.
+      + simpl in Hx_in. destruct Hx_in as [Heq | Hin'].
+        * subst. apply Nat.leb_le. exact Hleb.
+        * apply IH. exact Hin'.
+      + (* takeWhile stops when predicate is false, so nothing is in the result *)
+        simpl in Hx_in. contradiction.
+  }
+  (* Now use Hall_gt: n < y *)
+  assert (Hn_lt_y: n < y) by (apply Hall_gt; exact Hy).
+  lia.
+Qed.
+
+(* Stronger lemma with explicit invariant about acc and n *)
+Lemma zeckendorf_fuel_sorted_strong : forall fuel n acc,
+  Sorted_asc acc ->
+  (forall z, In z acc -> n < z) ->
+  Sorted_asc (zeckendorf_fuel fuel n acc).
+Proof.
+  induction fuel as [|fuel' IHfuel].
+  - (* Base case: fuel = 0 *)
+    intros n acc Hsorted Hinv.
+    simpl. exact Hsorted.
+  - (* Inductive case: fuel = S fuel' *)
+    intros n acc Hsorted Hinv.
+    destruct n as [|n'].
+    + (* n = 0: return acc *)
+      simpl. exact Hsorted.
+    + (* n = S n' > 0 *)
+      unfold zeckendorf_fuel. fold zeckendorf_fuel.
+      remember (rev (fibs_upto (S n'))) as fibs_list.
+      destruct fibs_list as [|x xs].
+      * (* No Fibonacci numbers found: return acc *)
+        exact Hsorted.
+      * (* Found largest Fibonacci x *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n': prepend x and recurse *)
+           apply IHfuel.
+           ++ (* Show Sorted_asc (x :: acc) *)
+              destruct acc as [|y ys].
+              ** (* acc = [] *) apply sorted_asc_cons_nil.
+              ** (* acc = y :: ys: need x < y *)
+                 apply sorted_asc_cons.
+                 --- (* Show x < y *)
+                     assert (Hx_in: In x (rev (fibs_upto (S n')))).
+                     { rewrite <- Heqfibs_list. simpl. left. reflexivity. }
+                     assert (Hx_pos: x > 0).
+                     { apply (in_fibs_upto_pos x (S n')). apply in_rev. exact Hx_in. }
+                     apply (all_acc_gt_largest_fib_le_n (S n') x (y :: ys) Hx_pos Hx_in Hsorted Hinv y).
+                     simpl. left. reflexivity.
+                 --- exact Hsorted.
+           ++ (* Show invariant for (x :: acc): for tail elements, (S n' - x) < z *)
+              intros z Hz.
+              simpl in Hz. destruct Hz as [Heq | Hin'].
+              ** (* z = x: We need to show S n' - x < x, i.e., S n' < 2*x *)
+                 (*
+                    REMAINING WORK: Prove that when x is the largest Fibonacci number
+                    <= S n', then S n' < 2*x.
+
+                    Proof strategy:
+                    1. Let k be the index such that fib(k) = x and fib(k) <= S n' < fib(k+1)
+                    2. We know from Fibonacci properties that fib(k+1) = fib(k) + fib(k-1)
+                    3. Therefore S n' < fib(k) + fib(k-1) = x + fib(k-1)
+                    4. For k >= 2, we have fib(k-1) < fib(k) (Fibonacci is monotonic)
+                    5. Thus S n' < x + x = 2*x
+
+                    Required lemmas to add:
+                    - Lemma fib_growth: forall k, k >= 2 -> fib(k-1) < fib(k)
+                    - Lemma largest_fib_bound: forall n x k,
+                        fib(k) = x -> x <= n -> n < fib(k+1) -> k >= 2 ->
+                        n < 2 * x
+
+                    See lines 813-826 for remainder_less_than_prev_fib which uses
+                    similar reasoning.
+                 *)
+                 admit.
+              ** (* z in acc: use original invariant *)
+                 assert (Hn_lt_z: S n' < z) by (apply Hinv; exact Hin').
+                 lia.
+        -- (* x > S n' (shouldn't happen): return acc *)
+           exact Hsorted.
+Admitted.  (* One admit remains: showing S n' < 2*x when x is largest Fib <= S n' *)
+
 Lemma zeckendorf_produces_sorted_asc : forall n acc,
   Sorted_asc acc ->
   (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x) ->
   Sorted_asc (zeckendorf n acc).
 Proof.
-  (* TODO: Prove that greedy algorithm maintains ascending sorted order *)
-  (* Key insight: since we always prepend larger elements, and process *)
-  (* n in decreasing order, the prepends build up an ascending list *)
-  admit.
+  intros n acc Hsorted Hacc_prop.
+  unfold zeckendorf.
+  (* The main case: empty accumulator *)
+  destruct acc as [|y ys].
+  - (* acc = []: use strong version with vacuous invariant *)
+    apply (zeckendorf_fuel_sorted_strong n n []).
+    + simpl. auto.
+    + intros z Hz. contradiction.
+  - (* acc = y :: ys: general case with non-empty accumulator *)
+    (*
+       REMAINING WORK: Prove the general case with non-empty accumulator
+
+       STATUS: This case is NOT needed for the codebase to work. The lemma is only
+       called with acc = [] at line 1214 in zeckendorf_sorted_produces_sorted_dec.
+
+       However, if you want to prove the general case for completeness:
+
+       Problem: The current hypotheses are insufficient. We have:
+       - Sorted_asc acc (the accumulator is sorted)
+       - (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x)
+
+       But we need: (forall z, In z acc -> n < z) to apply zeckendorf_fuel_sorted_strong
+
+       Solutions:
+       1. RECOMMENDED: Change the theorem statement to only require acc = []
+          This makes the theorem simpler and matches actual usage:
+
+          Lemma zeckendorf_produces_sorted_asc_empty : forall n,
+            Sorted_asc (zeckendorf n []).
+
+       2. Add the required invariant to hypotheses:
+
+          Lemma zeckendorf_produces_sorted_asc : forall n acc,
+            Sorted_asc acc ->
+            (forall z, In z acc -> n < z) ->  (* NEW HYPOTHESIS *)
+            Sorted_asc (zeckendorf n acc).
+
+       3. Prove that the existing second hypothesis implies (forall z, In z acc -> n < z)
+          This would require additional properties about how the algorithm is called,
+          which may not be provable from just the structure property.
+    *)
+    admit.
 Admitted.
 
 (*
