@@ -927,10 +927,9 @@ Admitted.
   ==============================================================================
 *)
 
-(* Helper lemma: elements in zeckendorf_fuel result are bounded by the input n *)
-Lemma zeckendorf_fuel_elements_bounded : forall fuel n acc x,
-  In x (zeckendorf_fuel fuel n acc) ->
-  ~In x acc ->
+(* Helper lemma: elements in zeckendorf_fuel result (with empty acc) are bounded by the input n *)
+Lemma zeckendorf_fuel_elements_bounded_empty : forall fuel n x,
+  In x (zeckendorf_fuel fuel n []) ->
   x <= n.
 Proof.
   (* This would follow by induction and using properties of fibs_upto *)
@@ -1074,9 +1073,8 @@ Proof.
 
                 (* Step 4: y is bounded *)
                 assert (Hy_bound: y <= S n' - x).
-                { apply zeckendorf_fuel_elements_bounded with (fuel := fuel') (acc := []).
-                  - exact Hy.
-                  - intro Hfalse. inversion Hfalse. }
+                { apply zeckendorf_fuel_elements_bounded_empty with (fuel := fuel').
+                  exact Hy. }
 
                 (* Step 5: fib j < fib (i - 1) *)
                 rewrite <- Hy_fib in Hy_bound.
