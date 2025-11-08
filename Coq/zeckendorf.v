@@ -1220,59 +1220,50 @@ Proof.
            exact Hsorted.
 Admitted.  (* One admit remains: showing S n' < 2*x when x is largest Fib <= S n' *)
 
+(*
+  Simplified lemma: zeckendorf produces sorted output for empty accumulator
+
+  This is the proven case and the only one used in practice.
+*)
+Lemma zeckendorf_produces_sorted_asc_empty : forall n,
+  Sorted_asc (zeckendorf n []).
+Proof.
+  intro n.
+  unfold zeckendorf.
+  apply (zeckendorf_fuel_sorted_strong n n []).
+  - (* Empty list is sorted *)
+    simpl. auto.
+  - (* Vacuous invariant: no elements in [] *)
+    intros z Hz. contradiction.
+Qed.
+
+(*
+  General lemma with arbitrary accumulator
+
+  NOTE: This general version is admitted because the hypotheses are insufficient.
+  To prove it, would need: (forall z, In z acc -> n < z) as an additional hypothesis.
+  However, this is never needed - all uses pass acc = [].
+*)
 Lemma zeckendorf_produces_sorted_asc : forall n acc,
   Sorted_asc acc ->
   (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x) ->
   Sorted_asc (zeckendorf n acc).
 Proof.
   intros n acc Hsorted Hacc_prop.
-  unfold zeckendorf.
-  (* The main case: empty accumulator *)
-  destruct acc as [|y ys].
-  - (* acc = []: use strong version with vacuous invariant *)
-    apply (zeckendorf_fuel_sorted_strong n n []).
-    + simpl. auto.
-    + intros z Hz. contradiction.
-  - (* acc = y :: ys: general case with non-empty accumulator *)
-    (*
-       REMAINING WORK: Prove the general case with non-empty accumulator
-
-       STATUS: This case is NOT needed for the codebase to work. The lemma is only
-       called with acc = [] at line 1214 in zeckendorf_sorted_produces_sorted_dec.
-
-       However, if you want to prove the general case for completeness:
-
-       Problem: The current hypotheses are insufficient. We have:
-       - Sorted_asc acc (the accumulator is sorted)
-       - (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x)
-
-       But we need: (forall z, In z acc -> n < z) to apply zeckendorf_fuel_sorted_strong
-
-       Solutions:
-       1. RECOMMENDED: Change the theorem statement to only require acc = []
-          This makes the theorem simpler and matches actual usage:
-
-          Lemma zeckendorf_produces_sorted_asc_empty : forall n,
-            Sorted_asc (zeckendorf n []).
-
-       2. Add the required invariant to hypotheses:
-
-          Lemma zeckendorf_produces_sorted_asc : forall n acc,
-            Sorted_asc acc ->
-            (forall z, In z acc -> n < z) ->  (* NEW HYPOTHESIS *)
-            Sorted_asc (zeckendorf n acc).
-
-       3. Prove that the existing second hypothesis implies (forall z, In z acc -> n < z)
-          This would require additional properties about how the algorithm is called,
-          which may not be provable from just the structure property.
-    *)
+  (* For empty accumulator, use the proven lemma *)
+  destruct Hacc_prop as [Heq | Hexists].
+  - (* acc = [] *)
+    subst acc. apply zeckendorf_produces_sorted_asc_empty.
+  - (* acc = xs ++ [x]: general case - admitted *)
+    (* This case requires additional invariants. See zeckendorf_fuel_sorted_strong
+       which needs (forall z, In z acc -> n < z) to proceed. *)
     admit.
 Admitted.
 
 (*
   Corollary: zeckendorf_sorted produces descending sorted output
 
-  Once we prove zeckendorf_produces_sorted_asc, this follows immediately.
+  This follows from zeckendorf_produces_sorted_asc_empty and rev_sorted_asc_dec.
 *)
 Lemma zeckendorf_sorted_produces_sorted_dec : forall n,
   Sorted_dec (zeckendorf_sorted n).
@@ -1280,12 +1271,8 @@ Proof.
   intro n.
   unfold zeckendorf_sorted.
   apply rev_sorted_asc_dec.
-  apply (zeckendorf_produces_sorted_asc n []).
-  - (* Empty list is sorted *)
-    simpl. auto.
-  - (* acc = [] satisfies the condition *)
-    left. reflexivity.
-Qed.  (* TODO: Relies on zeckendorf_produces_sorted_asc being proved *)
+  apply zeckendorf_produces_sorted_asc_empty.
+Qed.
 
 (*
   Helper lemma: fuel-based version of non-consecutive property
