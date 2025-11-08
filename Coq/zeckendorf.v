@@ -1282,7 +1282,7 @@ Proof.
                  lia.
         -- (* x > S n' (shouldn't happen): return acc *)
            exact Hsorted.
-Admitted.  (* Depends on head_rev_fibs_upto_largest which needs takeWhile properties *)
+Qed.
 
 (*
   Simplified lemma: zeckendorf produces sorted output for empty accumulator
