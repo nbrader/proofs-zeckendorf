@@ -321,12 +321,17 @@ Qed.
     F_{j-1} or F_j, ensuring no consecutive Fibonacci numbers
 
   Our implementation:
-  - zeckendorf_fuel: fuel-bounded greedy algorithm with accumulator
+  - zeckendorf_fuel: fuel-bounded greedy algorithm that conses to recursive result
   - zeckendorf: wrapper that calls zeckendorf_fuel with fuel=n
 
   The algorithm picks the largest Fibonacci number x ≤ n from fibs_upto(n),
-  adds it to the accumulator, and recursively processes n-x. The fuel parameter
-  ensures termination (proven via n-x < n by fib_decrease lemma).
+  conses it to the recursive result for n-x, and returns that. This naturally
+  produces a DESCENDING-SORTED list (largest first). The fuel parameter ensures
+  termination (proven via n-x < n by fib_decrease lemma).
+
+  Behavior: zeckendorf_fuel fuel n acc returns [fib1, fib2, ..., fibk] ++ acc
+  where fib1 > fib2 > ... > fibk are the Fibonacci decomposition of n in
+  descending order.
 *)
 
 Fixpoint zeckendorf_fuel (fuel n : nat) (acc : list nat) : list nat :=
@@ -340,7 +345,7 @@ Fixpoint zeckendorf_fuel (fuel n : nat) (acc : list nat) : list nat :=
            | [] => acc
            | x :: xs =>
              if Nat.leb x n
-             then zeckendorf_fuel fuel' (n - x) (x :: acc)
+             then x :: zeckendorf_fuel fuel' (n - x) acc
              else acc
            end
     end
@@ -370,9 +375,10 @@ Proof. intro. simpl. reflexivity. Qed.
   - When fuel = 0 or n = 0, the function returns acc unchanged, so the property holds
   - When fuel > 0 and n > 0:
     * The algorithm picks the largest Fibonacci number x <= n from fibs_upto n
-    * If x <= n, it recursively calls with (n-x) and (x::acc)
-    * We need to show x::acc preserves the invariant (all elements are Fibonacci)
-    * Since x comes from fibs_upto n, it's a Fibonacci number by in_fibs_upto_fib
+    * If x <= n, result is x :: zeckendorf_fuel fuel' (n-x) acc
+    * We need to show all elements in this result are Fibonacci:
+      - x is from fibs_upto n, so it's Fibonacci by in_fibs_upto_fib
+      - Elements in recursive result are Fibonacci by IH
     * The else branch (x > n) is impossible since x is from fibs_upto n, so x <= n
 *)
 Lemma zeckendorf_fuel_acc_fib : forall fuel n acc,
@@ -399,36 +405,27 @@ Proof.
       * (* Case: x is the largest Fibonacci number in fibs_upto n *)
         (* Check if x <= n *)
         destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* Subcase: x <= S n', so we recurse with (n-x) and (x::acc) *)
-           (* Apply IH to the recursive call *)
-           apply IHfuel in Hz.
-           ++ exact Hz.
-           ++ (* Need to prove: all elements in (x :: acc) are Fibonacci numbers *)
-              intros w Hin_w. simpl in Hin_w.
-              destruct Hin_w as [Heq | Hin_acc].
-              ** (* If w = x: x is a Fibonacci number from fibs_upto *)
-                 subst w.
-                 (* Show that x is in fibs_upto (S n') *)
-                 assert (Hin_x: In x (fibs_upto (S n'))).
-                 { (* x is the head of rev (fibs_upto n), so it's in fibs_upto n *)
-                   apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
-                 (* By in_fibs_upto_fib, x = fib(k) for some k *)
-                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
-                 exists k. symmetry. exact Heq_fib.
-              ** (* If w is in acc: use the assumption about acc *)
-                 apply Hacc_fib. exact Hin_acc.
+        -- (* Subcase: x <= S n', so result is x :: zeckendorf_fuel fuel' (n-x) acc *)
+           (* Hz says z is in (x :: recursive_result) *)
+           simpl in Hz. destruct Hz as [Heq | Hin_rec].
+           ++ (* z = x: x is a Fibonacci number from fibs_upto *)
+              subst z.
+              (* Show that x is in fibs_upto (S n') *)
+              assert (Hin_x: In x (fibs_upto (S n'))).
+              { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
+              (* By in_fibs_upto_fib, x = fib(k) for some k *)
+              destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
+              exists k. symmetry. exact Heq_fib.
+           ++ (* z is in the recursive result: apply IH *)
+              apply (IHfuel (S n' - x) acc).
+              ** exact Hacc_fib.
+              ** exact Hin_rec.
         -- (* Subcase: x > S n' - this is impossible! *)
-           (* Derive a contradiction: x is in fibs_upto n, so x <= n by in_fibs_upto_le,
-              but Hleb says x > n *)
            exfalso.
-           (* First, show x is in fibs_upto (S n') *)
            assert (Hin_x: In x (fibs_upto (S n'))).
            { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
-           (* Therefore x <= S n' by in_fibs_upto_le *)
            assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
-           (* But Hleb = false means x > S n' *)
            apply Nat.leb_gt in Hleb.
-           (* Contradiction: x <= S n' and x > S n' *)
            lia.
 Qed.
 
@@ -454,17 +451,18 @@ Qed.
 
   Statement: If fuel >= n, then sum_list(zeckendorf_fuel fuel n acc) = sum_list(acc) + n
 
-  Intuition: The algorithm decomposes n into Fibonacci numbers. At each step, it picks
-  the largest Fibonacci x <= n and recursively decomposes (n-x). The sum of all picked
-  Fibonacci numbers plus the sum of acc equals sum(acc) + n.
+  Intuition: The algorithm decomposes n into Fibonacci numbers by consing to recursive
+  result. At each step, it picks the largest Fibonacci x <= n and returns
+  x :: zeckendorf_fuel(n-x, acc). The sum equals x + sum(recursive result).
 
   Proof strategy: Induction on fuel.
   - Base case (fuel = 0): fuel >= n implies n = 0, so the sum is unchanged
   - Inductive case (fuel > 0, n > 0):
     * Pick largest Fibonacci x <= n
-    * Recursively process (n-x) with accumulator (x::acc)
-    * By IH: sum(result) = sum(x::acc) + (n-x) = x + sum(acc) + (n-x) = sum(acc) + n
-    * The arithmetic is handled by rewriting using associativity and commutativity
+    * Result is x :: zeckendorf_fuel fuel' (n-x) acc
+    * sum(result) = x + sum(zeckendorf_fuel fuel' (n-x) acc)
+    * By IH: sum(zeckendorf_fuel fuel' (n-x) acc) = sum(acc) + (n-x)
+    * Therefore: sum(result) = x + sum(acc) + (n-x) = sum(acc) + n
 *)
 Lemma zeckendorf_fuel_acc_sum : forall fuel n acc,
   fuel >= n ->
@@ -523,30 +521,18 @@ Proof.
              - (* If x < S n', then S n' - x < S n' <= S fuel' - 1 = fuel' *)
                assert (Hsub: S n' - x < S n') by (apply Nat.sub_lt; lia). lia.
            }
-           (* Apply induction hypothesis to the recursive call *)
-           assert (Heq_sum: sum_list (zeckendorf_fuel fuel' (S n' - x) (x :: acc)) =
-                           sum_list (x :: acc) + (S n' - x)).
+           (* Result is x :: zeckendorf_fuel fuel' (S n' - x) acc *)
+           (* Apply IH to recursive result *)
+           assert (Heq_sum: sum_list (zeckendorf_fuel fuel' (S n' - x) acc) =
+                           sum_list acc + (S n' - x)).
            { apply IHfuel. exact Hfuel_ge. }
-           (* Rewrite using IH *)
-           rewrite Heq_sum.
-           (* Now we need to show: sum_list(x::acc) + (S n' - x) = sum_list(acc) + S n'
-              This is an arithmetic identity: (x + sum_list acc) + (S n' - x) = sum_list acc + S n'
-              We prove it by arithmetic rewriting *)
+           (* The goal is sum_list(x :: zeckendorf_fuel fuel' (S n' - x) acc) = sum_list acc + S n' *)
+           (* Unfold sum_list for cons *)
            unfold sum_list at 1. fold sum_list.
-           (* Goal: (x + sum_list acc) + (S n' - x) = sum_list acc + S n' *)
-           (* Rewrite to isolate: x + (S n' - x) = S n' *)
-           rewrite <- Nat.add_assoc.
+           (* Now goal is: x + sum_list(zeckendorf_fuel fuel' (S n' - x) acc) = sum_list acc + S n' *)
+           rewrite Heq_sum.
            (* Goal: x + (sum_list acc + (S n' - x)) = sum_list acc + S n' *)
-           rewrite (Nat.add_comm (sum_list acc) (S n' - x)).
-           (* Goal: x + ((S n' - x) + sum_list acc) = sum_list acc + S n' *)
-           rewrite Nat.add_assoc.
-           (* Goal: (x + (S n' - x)) + sum_list acc = sum_list acc + S n' *)
-           rewrite (Nat.add_comm x (S n' - x)).
-           (* Goal: ((S n' - x) + x) + sum_list acc = sum_list acc + S n' *)
-           (* Use the fact that (S n' - x) + x = S n' when x <= S n' *)
-           rewrite Nat.sub_add by exact Hle.
-           (* Goal: S n' + sum_list acc = sum_list acc + S n' *)
-           apply Nat.add_comm.
+           lia.
         -- (* Subcase: x > S n' - impossible! *)
            (* Same contradiction as in zeckendorf_fuel_acc_fib *)
            exfalso.
@@ -1011,79 +997,20 @@ Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
   (forall z, In z acc -> exists k, z = fib k) ->
   no_consecutive_fibs (zeckendorf_fuel fuel n acc).
 Proof.
-  (* Induction on fuel *)
-  induction fuel as [|fuel' IHfuel].
-  - (* Base case: fuel = 0, function returns acc *)
-    intros n acc Hnocons_acc Hacc_fib.
-    simpl. exact Hnocons_acc.
-  - (* Inductive case: fuel = S fuel' *)
-    intros n acc Hnocons_acc Hacc_fib.
-    (* Case split on n *)
-    destruct n as [|n'].
-    + (* n = 0: function returns acc *)
-      simpl. exact Hnocons_acc.
-    + (* n = S n' > 0: algorithm picks largest Fib and recurses *)
-      unfold zeckendorf_fuel. fold zeckendorf_fuel.
-      (* Get the largest Fibonacci number <= n *)
-      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Heqfibs.
-      * (* Case: fibs_upto is empty (returns acc) *)
-        exact Hnocons_acc.
-      * (* Case: x is the largest Fibonacci <= n *)
-        destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* Subcase: x <= S n', recurse with (n-x) and (x::acc) *)
-           (* Apply IH to the recursive call *)
-           apply IHfuel.
-           ++ (* Need to show: no_consecutive_fibs (x :: acc) *)
-              (* This is the key part: we need to prove that x is not consecutive
-                 with any element in acc.
+  (* This was already admitted in the original code. With the cons-based structure,
+     the result is now: x :: zeckendorf_fuel fuel' (n-x) acc
 
-                 The intuition is:
-                 - x = fib(kx) is the largest Fibonacci <= n
-                 - All elements in acc came from smaller remainders
-                 - For any y in acc, y was picked from a remainder m where m <= n - x
-                 - Therefore, y <= m < fib(kx-1) (by the greedy property)
-                 - So y = fib(ky) where ky <= kx-2, ensuring non-consecutiveness
+     To prove this, we would need to show:
+     1. The recursive result has no consecutive fibs
+     2. x is not consecutive with any element in the recursive result
 
-                 However, proving this requires tracking additional invariants about
-                 the relationship between acc and the remainder, which is not captured
-                 in the current statement of the lemma.
+     The key insight is that x = largest fib <= n, and any element in the
+     recursive result comes from decomposing (n-x). By the greedy property,
+     we would need to show that (n-x) < fib(i-1) where x = fib(i), which
+     means the next fibonacci picked has index <= i-2, ensuring non-consecutiveness.
 
-                 A complete proof would require either:
-                 1. Strengthening the lemma with additional preconditions about acc
-                 2. Using a different induction principle that tracks more state
-                 3. Proving auxiliary lemmas about the structure of acc *)
-              unfold no_consecutive_fibs. fold no_consecutive_fibs.
-              split.
-              ** (* Show x is not consecutive with any element in acc *)
-                 intros y Hin_y i j Heq_x Heq_y Hcons.
-                 (* We need to derive a contradiction *)
-                 (* Key insight: y is in acc, so it was added in a previous step
-                    when the remainder was some m <= n - x *)
-                 (* We know: x = fib(i) and x <= S n'
-                    By greedy property: S n' < fib(i+1) (if i >= 2)
-                    Therefore: S n' - x < fib(i-1)
-                    So any Fibonacci in the next step has index <= i-2 *)
-                 (* This means y = fib(j) where j <= i-2 *)
-                 (* But Hcons says j = i+1 or i = j+1 (consecutive)
-                    This contradicts j <= i-2 *)
-                 (* However, we don't have the machinery to prove this formally
-                    because we need to track the history of acc *)
-                 admit.
-              ** (* Show acc still has no consecutive fibs *)
-                 exact Hnocons_acc.
-           ++ (* Need to show: all elements in (x :: acc) are Fibonacci numbers *)
-              intros z Hin_z. simpl in Hin_z.
-              destruct Hin_z as [Heq | Hin_acc].
-              ** (* z = x: x is a Fibonacci number from fibs_upto *)
-                 subst z.
-                 assert (Hin_x: In x (fibs_upto (S n'))).
-                 { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
-                 destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
-                 exists k. symmetry. exact Heq_fib.
-              ** (* z is in acc: use assumption *)
-                 apply Hacc_fib. exact Hin_acc.
-        -- (* Subcase: x > S n' (impossible, returns acc) *)
-           exact Hnocons_acc.
+     However, this requires strengthening the lemma with additional invariants
+     about the relationship between the remainder and the accumulator. *)
 Admitted.
 
 (*
