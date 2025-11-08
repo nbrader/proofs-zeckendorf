@@ -998,27 +998,79 @@ Proof.
            ++ (* Show: forall y in recursive result, x and y are not consecutive fibs *)
               intros y Hy i j Hx Hy_fib Hcons.
 
-              (* Step 1: x is a Fibonacci number from fibs_upto *)
-              assert (Hx_is_fib: exists k, k >= 2 /\ fib k = x /\ S n' < fib (S k)).
-              { admit. }
-              destruct Hx_is_fib as [k [Hk_ge [Hfib_k Hn_lt_fib_Sk]]].
+              (* Establish that x > 0 since it's in fibs_upto *)
+              assert (Hx_pos: x > 0).
+              { apply in_fibs_upto_pos with (n := S n').
+                (* x is in fibs_upto (S n') because it's in rev (fibs_upto (S n')) *)
+                assert (Hin_rev: In x (rev (fibs_upto (S n')))).
+                { rewrite Hfibs. apply in_eq. }
+                rewrite <- in_rev in Hin_rev. exact Hin_rev. }
 
-              (* Step 2: i = k by Fibonacci equality *)
-              assert (Hi_eq_k: i = k).
-              { admit. }
-              subst k. clear Hx.
+              (* Case split on whether i >= 2 *)
+              destruct (Nat.lt_ge_cases i 2) as [Hi_lt | Hi_ge].
+              {(* Case: i < 2, so i = 0 or i = 1 *)
+                destruct i as [|[|i']].
+                - (* i = 0: fib 0 = 0 = x, contradicts x > 0 *)
+                  rewrite <- Hx in Hx_pos. simpl in Hx_pos. lia.
+                - (* i = 1: fib 1 = 1 = x, so x = 1 *)
+                  (* When x = 1 is the largest Fib <= S n', we have S n' < 2 (otherwise fib 3 = 2 would be larger) *)
+                  (* So S n' = 1, meaning n' = 0, and the remainder is 0 *)
+                  assert (Hn'_eq_0: n' = 0).
+                  { (* x is the head of rev (fibs_upto (S n')), so x is the largest Fib <= S n' *)
+                    (* We have fib 1 = 1 = x and x is the largest, so S n' < fib 3 = 2 *)
+                    (* This means S n' <= 1, and since S n' >= 1 (successor), we have S n' = 1 *)
+                    (* If S n' >= 2, then fib 3 = 2 would be in fibs_upto and would be the head of rev *)
+                    destruct n' as [|n''].
+                    + reflexivity.
+                    + (* n' = S n'', so S n' = S (S n'') >= 2 *)
+                      (* We'll show that fib 3 = 2 is in fibs_upto (S (S n'')) and is larger than x = 1 *)
+                      (* This contradicts x being the head (largest element) of rev (fibs_upto (S (S n''))) *)
+                      exfalso.
+                      (* Key insight: For this case, we need a lemma about fibs_upto structure.
+                         For now, admit this technical detail. The intuition is clear:
+                         - fib 3 = 2 and 2 <= S (S n''), so 2 is in fibs_upto (S (S n''))
+                         - 2 > 1 = x
+                         - Therefore x cannot be the maximum (head of reversed list) *)
+                      admit.
+                  }
+                  subst n'.
+                  (* Now S n' = S 0 = 1, so the recursive call is on remainder 0 (since x = 1) *)
+                  (* Rewrite x = fib 1 = 1 in Hy *)
+                  assert (Hx_eq_1: x = 1).
+                  { simpl in Hx. symmetry. exact Hx. }
+                  rewrite Hx_eq_1 in Hy.
+                  simpl in Hy.
+                  (* Now Hy : In y (zeckendorf_fuel fuel' 0 []) *)
+                  (* zeckendorf_fuel fuel' 0 [] = [] for any fuel *)
+                  destruct fuel' eqn:Hfuel; simpl in Hy; inversion Hy.
+                - (* i = S (S i') where i' >= 0, contradicts i < 2 *)
+                  lia.
+              }
+              (* Case: i >= 2 - use the general strategy *)
 
-              (* Step 3: Case split on x < S n' or x = S n' *)
+              (* Step 1: Establish S n' < fib (S i) using largest_fib_in_fibs_upto *)
+              assert (Hn_lt_fib_Si: S n' < fib (S i)).
+              { apply Nat.leb_le in Hleb.
+                destruct (Nat.eq_dec x (S n')) as [Heq | Hneq].
+                - (* If x = S n', then S n' < fib (S i) follows from x being a Fib and Fib monotonicity *)
+                  rewrite <- Heq. rewrite <- Hx.
+                  apply fib_mono. right. exact Hi_ge.
+                - (* If x < S n', use largest_fib_in_fibs_upto *)
+                  assert (Hx_lt: x < S n') by lia.
+                  apply (largest_fib_in_fibs_upto x i (S n') xs); assumption.
+              }
+
+              (* Step 2: Case split on x < S n' or x = S n' *)
               apply Nat.leb_le in Hleb.
               assert (Hx_lt_or_eq: x < S n' \/ x = S n') by lia.
               destruct Hx_lt_or_eq as [Hx_lt | Hx_eq].
               { (* Case: x < S n' *)
                 assert (Hremainder: S n' - x < fib (i - 1)).
-                { rewrite <- Hfib_k.
+                { rewrite <- Hx.
                   apply remainder_less_than_prev_fib.
-                  - exact Hk_ge.
-                  - rewrite Hfib_k. exact Hx_lt.
-                  - exact Hn_lt_fib_Sk. }
+                  - exact Hi_ge.
+                  - rewrite Hx. exact Hx_lt.
+                  - exact Hn_lt_fib_Si. }
 
                 (* Step 4: y is bounded *)
                 assert (Hy_bound: y <= S n' - x).
