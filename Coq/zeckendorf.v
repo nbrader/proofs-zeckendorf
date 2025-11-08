@@ -1144,6 +1144,64 @@ Proof.
     lia.
 Qed.
 
+(*
+  Helper lemma: In a non-empty fibs_upto list, the head of the reversed list
+  is the largest Fibonacci number <= n, and the next Fibonacci is > n.
+
+  This is a key property of the greedy algorithm's correctness.
+*)
+Lemma head_rev_fibs_upto_largest : forall n x xs,
+  rev (fibs_upto n) = x :: xs ->
+  n > 0 ->
+  exists k, k >= 2 /\ fib k = x /\ fib k <= n /\ n < fib (S k).
+Proof.
+  intros n x xs Hrev Hn_pos.
+  (* x must be a Fibonacci number *)
+  assert (Hx_in: In x (fibs_upto n)).
+  { apply in_list_rev. rewrite Hrev. simpl. left. reflexivity. }
+  assert (Hx_fib: exists k, k >= 1 /\ fib k = x).
+  { apply (in_fibs_upto_fib x n). exact Hx_in. }
+  destruct Hx_fib as [k [Hk_ge Hfib_eq]].
+
+  (* x is in fibs_upto n, so x <= n *)
+  assert (Hx_le_n: x <= n).
+  { unfold fibs_upto in Hx_in.
+    clear -Hx_in.
+    induction (seq 1 (S n)) as [|a l IH].
+    - simpl in Hx_in. contradiction.
+    - simpl in Hx_in.
+      destruct (Nat.leb (fib a) n) eqn:Hleb.
+      + simpl in Hx_in. destruct Hx_in as [Heq | Hin'].
+        * subst. apply Nat.leb_le. exact Hleb.
+        * apply IH. exact Hin'.
+      + simpl in Hx_in. contradiction. }
+
+  (* The next Fibonacci after x must be > n *)
+  (* This follows from the fact that takeWhile stopped including elements *)
+  (* For now, we need k >= 2 and fib(S k) > n *)
+
+  (* First handle the case k = 1 *)
+  destruct (Nat.eq_dec k 1) as [Heq_k1 | Hneq_k1].
+  - (* k = 1: x = fib 1 = 1 *)
+    subst k. simpl in Hfib_eq. subst x.
+    (* If x = 1 is the largest Fib <= n, then n < fib 2 = 1, but n > 0,
+       so n = 1, which means fib 2 = 1 is not > n. Contradiction. *)
+    (* Actually fib 2 = 1 also, so we need to check fib 3 = 2 *)
+    (* If rev (fibs_upto n) = 1 :: xs and n >= 2, then 2 should also be in the list *)
+    admit. (* Need to prove that if n >= 2, then fibs_upto n contains fib 3 = 2 *)
+
+  - (* k >= 2 *)
+    assert (Hk_ge2: k >= 2) by lia.
+    exists k. split; [exact Hk_ge2 | split; [exact Hfib_eq | split]].
+    + (* fib k <= n *)
+      rewrite Hfib_eq. exact Hx_le_n.
+    + (* n < fib (S k) *)
+      (* This is the key property: since x is the head of rev (fibs_upto n),
+         and fibs_upto uses takeWhile to stop when fib > n,
+         the next Fibonacci must be > n *)
+      admit. (* Need infrastructure about takeWhile and fibs_upto *)
+Admitted.
+
 (* Stronger lemma with explicit invariant about acc and n *)
 Lemma zeckendorf_fuel_sorted_strong : forall fuel n acc,
   Sorted_asc acc ->
@@ -1186,39 +1244,31 @@ Proof.
               intros z Hz.
               simpl in Hz. destruct Hz as [Heq | Hin'].
               ** (* z = x: We need to show S n' - x < x, i.e., S n' < 2*x *)
-                 (* x is a Fibonacci number from fibs_upto, which contains fibs >= 1 *)
                  rewrite Heq.
-                 assert (Hx_in': In x (rev (fibs_upto (S n')))).
-                 { rewrite <- Heqfibs_list. simpl. left. reflexivity. }
-                 (* x is a Fibonacci number fib(k) for some k >= 1 *)
-                 assert (Hx_fib: exists k, k >= 1 /\ fib k = x).
-                 { apply (in_fibs_upto_fib x (S n')). apply in_rev. exact Hx_in'. }
-                 destruct Hx_fib as [k [Hk_ge Hfib_eq]].
-                 (* We need to apply largest_fib_less_than_double *)
-                 (* For this we need: k >= 2, fib k <= S n', S n' < fib (S k) *)
-                 (*
-                    TODO: This requires proving that x is the *largest* Fib <= S n',
-                    i.e., that the next Fibonacci number is > S n'.
-                    This would need additional infrastructure about fibs_upto.
+                 (* Use head_rev_fibs_upto_largest to get properties of x *)
+                 assert (Hn'_pos: S n' > 0) by lia.
+                 assert (Hlargest: exists k, k >= 2 /\ fib k = x /\ fib k <= S n' /\ S n' < fib (S k)).
+                 { apply (head_rev_fibs_upto_largest (S n') x xs).
+                   - apply eq_sym. exact Heqfibs_list.
+                   - exact Hn'_pos. }
+                 destruct Hlargest as [k [Hk_ge [Hfib_eq [Hfib_le Hn_lt_next]]]].
 
-                    For now, we use the fact that x <= S n' and x > 0,
-                    which gives us S n' - x < S n'. Combined with x > 0,
-                    we can show the invariant holds for practical cases.
+                 (* Now apply largest_fib_less_than_double *)
+                 assert (Hn_lt_2x: S n' < 2 * fib k).
+                 { apply (largest_fib_less_than_double (S n') k).
+                   - exact Hk_ge.
+                   - exact Hfib_le.
+                   - exact Hn_lt_next. }
 
-                    A complete proof would need:
-                    Lemma head_of_rev_fibs_upto_is_largest : forall n x,
-                      In x (rev (fibs_upto n)) ->
-                      x = hd 0 (rev (fibs_upto n)) ->
-                      (forall y, In y (fibs_upto n) -> y <= x) /\
-                      (exists k, fib k = x /\ fib (S k) > n).
-                 *)
-                 admit.
+                 (* Substitute fib k = x *)
+                 rewrite Hfib_eq in Hn_lt_2x.
+                 lia.
               ** (* z in acc: use original invariant *)
                  assert (Hn_lt_z: S n' < z) by (apply Hinv; exact Hin').
                  lia.
         -- (* x > S n' (shouldn't happen): return acc *)
            exact Hsorted.
-Admitted.  (* One admit remains: showing S n' < 2*x when x is largest Fib <= S n' *)
+Admitted.  (* Depends on head_rev_fibs_upto_largest which needs takeWhile properties *)
 
 (*
   Simplified lemma: zeckendorf produces sorted output for empty accumulator
