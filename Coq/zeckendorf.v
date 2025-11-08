@@ -895,6 +895,37 @@ Proof.
 Qed.
 
 (*
+  Key property: If x is the head of rev(fibs_upto n) and x < n, then for
+  x = fib(i), we have n < fib(i+1).
+
+  This captures the "greedy" property: x is the largest Fibonacci <= n.
+*)
+Lemma largest_fib_in_fibs_upto : forall x i n xs,
+  i >= 2 ->
+  fib i = x ->
+  rev (fibs_upto n) = x :: xs ->
+  x < n ->
+  n < fib (S i).
+Proof.
+  (* This requires reasoning about takeWhile on monotonic sequences.
+     The intuition: fibs_upto n = takeWhile (<=n) [fib 1, fib 2, fib 3, ...]
+     Since Fibonacci is monotonic increasing, takeWhile stops at the first
+     Fibonacci > n. So the last element taken (= first element of reversed list)
+     is the largest Fibonacci <= n, call it fib(i). The next Fibonacci fib(i+1)
+     must be > n (otherwise it would have been included).
+
+     A complete proof would require:
+     1. Proving map fib (seq 1 (S n)) contains fib 1 through fib n in order
+     2. Proving Fibonacci is monotonic (we have this: fib_mono)
+     3. Proving takeWhile on a monotonic sequence with a monotonic predicate
+        has the property that if it includes fib k, then either:
+        - fib (k+1) is not in the source list, OR
+        - fib (k+1) fails the predicate
+
+     For now, we admit this as it's a standard property of the greedy algorithm. *)
+Admitted.
+
+(*
   ==============================================================================
   SORTED OUTPUT VERSION
   ==============================================================================
@@ -992,25 +1023,37 @@ Qed.
   Fibonacci number F_k, the remainder n - F_k < F_{k-1}, so the next Fibonacci
   picked has index ≤ k-2, ensuring no consecutive Fibs are added.
 *)
+(*
+  Helper: Any Fibonacci number <= m has an index
+  (This is a trivial helper that's not actually needed, but kept for reference)
+*)
+
 Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
   no_consecutive_fibs acc ->
   (forall z, In z acc -> exists k, z = fib k) ->
   no_consecutive_fibs (zeckendorf_fuel fuel n acc).
 Proof.
-  (* This was already admitted in the original code. With the cons-based structure,
-     the result is now: x :: zeckendorf_fuel fuel' (n-x) acc
+  (* This lemma requires a stronger induction hypothesis that tracks the relationship
+     between elements being added and the accumulator.
 
-     To prove this, we would need to show:
-     1. The recursive result has no consecutive fibs
-     2. x is not consecutive with any element in the recursive result
+     The proof strategy is:
+     1. For result x :: zeckendorf_fuel fuel' (n-x) acc, we need to show:
+        a) x is not consecutive with any element in the recursive result
+        b) The recursive result has no consecutive fibs (by IH)
 
-     The key insight is that x = largest fib <= n, and any element in the
-     recursive result comes from decomposing (n-x). By the greedy property,
-     we would need to show that (n-x) < fib(i-1) where x = fib(i), which
-     means the next fibonacci picked has index <= i-2, ensuring non-consecutiveness.
+     2. For part (a), we need to show:
+        - If x = fib(i) is from fibs_upto n with x < n, then n < fib(i+1) (largest_fib_in_fibs_upto)
+        - By remainder_less_than_prev_fib: n - x < fib(i-1)
+        - Any Fibonacci y in the recursive result either:
+          * Comes from acc (and we need an invariant saying acc elements aren't consecutive with x)
+          * Comes from decomposing (n-x), so y is a Fib <= (n-x) < fib(i-1)
+            Therefore y = fib(j) with j <= i-2, so not consecutive with i
 
-     However, this requires strengthening the lemma with additional invariants
-     about the relationship between the remainder and the accumulator. *)
+     The missing piece is an invariant about acc: we need to know that elements in acc
+     are "small enough" that they won't be consecutive with x. This requires strengthening
+     the lemma to track this property.
+
+     For now, we admit this as it requires significant restructuring of the invariant. *)
 Admitted.
 
 (*
