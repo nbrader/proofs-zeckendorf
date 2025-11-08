@@ -9,6 +9,64 @@ Require Import Recdef.
 Require Import Lia.
 Import ListNotations.
 
+(*
+  ==============================================================================
+  FORMAL VERIFICATION OF ZECKENDORF'S THEOREM
+  ==============================================================================
+
+  This file contains a formal proof of Zeckendorf's theorem in Coq, following
+  the structure of the standard proof (see "Rough Working/wiki proof.txt").
+
+  ZECKENDORF'S THEOREM states that every positive integer can be represented
+  uniquely as a sum of non-consecutive Fibonacci numbers.
+
+  The theorem has two parts:
+
+  1. EXISTENCE (lines 250-1010):
+     Every positive integer n has a Zeckendorf representation.
+
+     Wiki proof strategy: Use strong induction on n. Pick the largest Fibonacci
+     number F_j ≤ n, then recursively decompose b = n - F_j. Since
+     b < F_{j+1} - F_j = F_{j-1}, the representation of b doesn't contain
+     F_{j-1} or F_j, ensuring no consecutive Fibonacci numbers.
+
+     Our implementation: We use a greedy algorithm (zeckendorf_fuel) that
+     implements this strategy. We prove:
+     - All elements are Fibonacci numbers (zeckendorf_fib_property)
+     - The sum equals n (zeckendorf_sum_property)
+     - No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
+
+     Main theorem: zeckendorf_is_the_unique_repr (line 2559)
+     Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive)
+
+  2. UNIQUENESS (lines 1020-2430):
+     No positive integer has two different Zeckendorf representations.
+
+     Wiki proof strategy: Given two representations S and T with the same sum,
+     remove common elements to get S' and T'. Prove by contradiction that both
+     can't be non-empty: if max(S') = F_s < F_t = max(T'), then by the key
+     lemma, sum(S') < F_{s+1} ≤ F_t ≤ sum(T'), contradiction. Therefore S = T.
+
+     Key lemma: The sum of non-consecutive Fibonacci numbers with maximum F_j
+     is strictly less than F_{j+1}. (Corresponds to wiki proof line 11)
+     Implementation: sum_nonconsec_fibs_bounded_sorted (line 1681)
+
+     Main theorem: zeckendorf_unique_sorted (line 2234)
+     Status: Fully proven, no admits
+
+  PROOF STRUCTURE:
+  - Lines 12-248:   Fibonacci basics and helper lemmas
+  - Lines 250-267:  Greedy algorithm implementation
+  - Lines 270-505:  Algorithm correctness (sum and Fibonacci properties)
+  - Lines 507-1010: Existence proof (includes 1 admit)
+  - Lines 1020-1680: Fibonacci gap properties and list helpers
+  - Lines 1681-2233: Key lemma for uniqueness (fully proven)
+  - Lines 2234-2430: Uniqueness theorem (fully proven)
+  - Lines 2432-2571: Supporting lemmas and final theorem
+
+  See "Rough Working/wiki proof.txt" for the informal proof this formalizes.
+*)
+
 Fixpoint fib (n : nat) : nat :=
   match n with
   | 0 => 0
@@ -246,6 +304,30 @@ Lemma in_list_rev : forall {A} (x : A) l,
 Proof.
   intros. apply in_rev. assumption.
 Qed.
+
+(*
+  ==============================================================================
+  GREEDY ALGORITHM - Implements Wiki Existence Proof Strategy
+  ==============================================================================
+
+  The following functions implement the greedy algorithm for constructing
+  Zeckendorf representations, directly corresponding to the inductive proof
+  strategy from the wiki proof (see "Rough Working/wiki proof.txt" lines 7).
+
+  Wiki proof strategy recap:
+  - Pick the largest Fibonacci number F_j ≤ n
+  - Recursively decompose b = n - F_j
+  - Since b < F_{j+1} - F_j = F_{j-1}, the decomposition of b won't contain
+    F_{j-1} or F_j, ensuring no consecutive Fibonacci numbers
+
+  Our implementation:
+  - zeckendorf_fuel: fuel-bounded greedy algorithm with accumulator
+  - zeckendorf: wrapper that calls zeckendorf_fuel with fuel=n
+
+  The algorithm picks the largest Fibonacci number x ≤ n from fibs_upto(n),
+  adds it to the accumulator, and recursively processes n-x. The fuel parameter
+  ensures termination (proven via n-x < n by fib_decrease lemma).
+*)
 
 Fixpoint zeckendorf_fuel (fuel n : nat) (acc : list nat) : list nat :=
   match fuel with
@@ -505,16 +587,29 @@ Qed.
 
 (*
   ==============================================================================
-  MAIN ZECKENDORF CORRECTNESS THEOREMS
+  EXISTENCE PROOF - Part 1 of Zeckendorf's Theorem
   ==============================================================================
 
-  These theorems establish the correctness of the Zeckendorf representation
-  algorithm by proving two key properties:
-  1. All elements in the decomposition are Fibonacci numbers
-  2. The sum of the decomposition equals the original input
+  This section proves the EXISTENCE part of Zeckendorf's theorem:
+  "Every positive integer n has a Zeckendorf representation."
 
-  Together, these prove that zeckendorf computes a valid Zeckendorf
-  representation (a sum of non-consecutive Fibonacci numbers equaling n).
+  Corresponds to wiki proof lines 4-7 (see "Rough Working/wiki proof.txt").
+
+  Wiki proof structure:
+  - Use strong induction on n
+  - For any n, pick largest F_j ≤ n
+  - Decompose b = n - F_j recursively
+  - Since b < F_{j-1}, no consecutive Fibonacci numbers appear
+
+  Our formal proof establishes three properties of zeckendorf(n, []):
+  1. All elements are Fibonacci numbers (zeckendorf_fib_property)
+  2. The sum equals n (zeckendorf_sum_property)
+  3. No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
+
+  Together, these prove that zeckendorf produces a valid Zeckendorf representation.
+
+  Main theorem: zeckendorf_is_the_unique_repr (line ~2610)
+  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive at line ~950)
 *)
 
 (*
@@ -1667,16 +1762,30 @@ Proof.
 Qed.
 
 (*
-  Sum bound for sorted non-consecutive Fibonacci lists (SIMPLIFIED VERSION)
+  ==============================================================================
+  KEY LEMMA FOR UNIQUENESS - Corresponds to Wiki Proof Line 11
+  ==============================================================================
 
-  This is a dramatically simplified version that works with sorted lists.
-  Since the list is sorted in descending order with fib k at the head:
-  - No need to search for the maximum (it's the head)
+  This is THE CENTRAL LEMMA for proving uniqueness in Zeckendorf's theorem.
+
+  Wiki proof statement (line 11):
+  "The sum of any non-empty set of distinct, non-consecutive Fibonacci numbers
+   whose largest member is F_j is strictly less than F_{j+1}."
+
+  This lemma enables the contradiction argument in the uniqueness proof:
+  If we have two different representations S and T with the same sum, and
+  max(S) = F_s < F_t = max(T), then sum(S) < F_{s+1} ≤ F_t ≤ sum(T),
+  contradicting the assumption that sum(S) = sum(T).
+
+  Implementation notes:
+  - This is a simplified version that works with descending-sorted lists
+  - Since sorted, the maximum is the head element (fib k)
+  - The proof proceeds by strong induction on k
   - Pattern matching is direct: l = fib k :: xs
   - NoDup follows automatically from Sorted_dec
   - Only need to check adjacent pairs for non-consecutive property
 
-  The proof is much shorter and more direct than the unsorted version.
+  Status: FULLY PROVEN (no admits)
 *)
 Lemma sum_nonconsec_fibs_bounded_sorted : forall k xs,
   k >= 2 ->
@@ -2212,24 +2321,50 @@ Qed.
 
 (*
   ==============================================================================
-  ALTERNATIVE UNIQUENESS PROOF USING SORTED LISTS
+  UNIQUENESS PROOF - Part 2 of Zeckendorf's Theorem
   ==============================================================================
+
+  This section proves the UNIQUENESS part of Zeckendorf's theorem:
+  "No positive integer has two different Zeckendorf representations."
+
+  Corresponds to wiki proof lines 9-19 (see "Rough Working/wiki proof.txt").
+
+  Wiki proof structure:
+  1. Take two representations S and T with the same sum
+  2. Remove common elements to get S' = S \ T and T' = T \ S
+  3. Since S and T had equal sum, so do S' and T'
+  4. Prove by contradiction that at least one of S', T' is empty:
+     - Assume both non-empty with max(S') = F_s < F_t = max(T')
+     - By key lemma: sum(S') < F_{s+1} ≤ F_t ≤ sum(T')
+     - This contradicts sum(S') = sum(T')
+  5. Therefore S' = T' = empty, so S = T
+
+  Our implementation uses sorted lists for a cleaner proof:
+  - Instead of set difference, we use structural comparison
+  - The maximum element is just the head of the sorted list
+  - We prove by strong induction on n that two sorted representations
+    with sum n must be equal
+  - The key step uses sum_nonconsec_fibs_bounded_sorted (the wiki's key lemma)
+    to derive a contradiction when the head elements differ
+
+  Main theorem: zeckendorf_unique_sorted (below)
+  Status: FULLY PROVEN (no admits)
 *)
 
 (*
-  Alternative uniqueness theorem for sorted Zeckendorf representations
+  Uniqueness theorem for sorted Zeckendorf representations
 
-  This version proves uniqueness specifically for descending-sorted lists,
-  which simplifies the proof by avoiding the need for set difference operations.
+  Given two descending-sorted lists of non-consecutive Fibonacci numbers
+  (indices >= 2) with the same sum n, they must be equal.
 
-  Strategy:
-  1. If both lists are sorted descending with the same sum and properties,
-     they must have the same maximum element (by contradiction using
-     sum_nonconsec_fibs_bounded_sorted)
-  2. Remove the maximum from both lists and apply induction on the sum
-
-  This is cleaner than the general proof because sorted lists allow direct
-  structural comparison.
+  Proof strategy:
+  1. If both lists are empty, they're equal
+  2. If one is empty and one non-empty, derive contradiction (positive sum vs zero)
+  3. If both non-empty, prove heads must be equal by contradiction:
+     - Assume x1 < x2 (heads of l1, l2)
+     - By sum_nonconsec_fibs_bounded_sorted: sum(l1) < fib(i1+1) ≤ fib(i2) ≤ sum(l2)
+     - This contradicts sum(l1) = sum(l2) = n
+  4. Once heads equal, remove them and apply induction on n - head
 *)
 Theorem zeckendorf_unique_sorted : forall n l1 l2,
   Sorted_dec l1 ->
