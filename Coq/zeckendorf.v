@@ -135,31 +135,44 @@ Qed.
   For n >= 3, we show fib(n) < fib(n+1) by rewriting fib(n+1) = fib(n) + fib(n-1)
   and noting that fib(n-1) > 0, so fib(n) < fib(n) + fib(n-1).
 *)
-Lemma fib_mono : forall n, n >= 2 -> fib n < fib (S n).
+Lemma fib_mono : forall n, (n = 0 \/ n >= 2) <-> fib n < fib (S n).
 Proof.
-  intro n. pattern n. apply lt_wf_ind. clear n.
-  intros n IH Hge.
-  (* Case split on n to handle base cases *)
-  destruct n as [|[|[|n'']]].
-  - (* Case n = 0: Contradicts n >= 2 *)
-    inversion Hge.
-  - (* Case n = 1: Contradicts n >= 2 (since 1 < 2) *)
-    inversion Hge. inversion H0.
-  - (* Case n = 2: fib(2) < fib(3), i.e., 1 < 2, verified by computation *)
-    simpl. auto.
-  - (* Case n >= 3: Show fib(n) < fib(n+1) using the recurrence relation *)
-    (* First, establish that fib(n-1) > 0, which we'll need later *)
-    assert (Hpos: fib (S (S n'')) > 0).
-    { apply fib_pos. apply le_n_S. apply Nat.le_0_l. }
-    (* Rewrite fib(n+1) using the Fibonacci recurrence:
-       fib(n+1) = fib(n) + fib(n-1) *)
-    assert (Heq: fib (S (S (S (S n'')))) = fib (S (S (S n''))) + fib (S (S n''))).
-    { replace (S (S (S (S n'')))) with (S (S (S (S n'')))) by reflexivity.
-      rewrite fib_SS. reflexivity. }
-    rewrite Heq.
-    (* Now goal is: fib(n) < fib(n) + fib(n-1)
-       This follows from fib(n-1) > 0 *)
-    apply Nat.lt_add_pos_r. assumption.
+  split.
+  - pattern n. apply lt_wf_ind. clear n.
+    intros n IH Hineq.
+    destruct Hineq as [base|Hge].
+    + rewrite base. simpl. lia.
+    + (* Case split on n to handle base cases *)
+      destruct n as [|[|[|n'']]].
+      * (* Case n = 0: Contradicts n >= 2 *)
+        inversion Hge.
+      * (* Case n = 1: Contradicts n >= 2 (since 1 < 2) *)
+        inversion Hge. inversion H0.
+      * (* Case n = 2: fib(2) < fib(3), i.e., 1 < 2, verified by computation *)
+        simpl. auto.
+      * (* Case n >= 3: Show fib(n) < fib(n+1) using the recurrence relation *)
+        (* First, establish that fib(n-1) > 0, which we'll need later *)
+        assert (Hpos: fib (S (S n'')) > 0).
+        { apply fib_pos. apply le_n_S. apply Nat.le_0_l. }
+        (* Rewrite fib(n+1) using the Fibonacci recurrence:
+          fib(n+1) = fib(n) + fib(n-1) *)
+        assert (Heq: fib (S (S (S (S n'')))) = fib (S (S (S n''))) + fib (S (S n''))).
+        { replace (S (S (S (S n'')))) with (S (S (S (S n'')))) by reflexivity.
+          rewrite fib_SS. reflexivity. }
+        rewrite Heq.
+        (* Now goal is: fib(n) < fib(n) + fib(n-1)
+          This follows from fib(n-1) > 0 *)
+        apply Nat.lt_add_pos_r. assumption.
+  - (* Reverse direction: If fib n < fib (S n), then n >= 2 *)
+    intros Hlt.
+    (* We prove by contradiction: if n < 2, then fib n >= fib (S n) *)
+    destruct n as [|[|n']].
+    + (* Case n = 0: fib(0) = 0, fib(1) = 1, so 0 < 1 holds, contradicts our assumption *)
+      simpl in Hlt. lia.
+    + (* Case n = 1: fib(1) = 1, fib(2) = 1, so 1 < 1 does not hold, contradicts our assumption *)
+      simpl in Hlt. lia.
+    + (* Case n >= 2: no contradiction, so n >= 2 holds *)
+      lia.
 Qed.
 
 (*
@@ -914,32 +927,142 @@ Admitted.
   ==============================================================================
 *)
 
+(* Helper lemma: elements in zeckendorf_fuel result are bounded by the input n *)
+Lemma zeckendorf_fuel_elements_bounded : forall fuel n acc x,
+  In x (zeckendorf_fuel fuel n acc) ->
+  ~In x acc ->
+  x <= n.
+Proof.
+  (* This would follow by induction and using properties of fibs_upto *)
+Admitted.
+
+(* Helper lemma: if fib j < fib (k - 1), then k and j are not consecutive *)
+Lemma fib_lt_prev_implies_not_consecutive : forall k j,
+  fib j < fib (k - 1) ->
+  ~nat_consecutive k j.
+Proof.
+  intros k j Hfib_lt Hcontra.
+  unfold nat_consecutive in Hcontra.
+  destruct Hcontra as [Hj_eq_Sk | Hk_eq_Sj].
+  - (* Case: j = S k, i.e., k = j - 1, so k - 1 = j - 2 *)
+    (* We have fib j < fib (j - 2), which contradicts monotonicity *)
+    assert (Hk_eq: k = j - 1) by lia.
+    rewrite Hk_eq in Hfib_lt.
+    replace (j - 1 - 1) with (j - 2) in Hfib_lt by lia.
+    (* Consider cases on j *)
+    destruct j as [|[|[|[|j']]]].
+    + (* j = 0 *) lia.
+    + (* j = 1: then 1 = S k means k = 0, and k - 1 = 0 - 1 *)
+      (* We have fib 1 < fib (1 - 2), i.e., 1 < fib 0 = 0 *)
+      simpl in Hfib_lt. lia.
+    + (* j = 2: fib 2 < fib 0 is 1 < 0 *)
+      simpl in Hfib_lt. lia.
+    + (* j = 3: fib 3 < fib 1 is 2 < 1 *)
+      simpl in Hfib_lt. lia.
+    + (* j = S (S (S (S j'))), i.e., j >= 4 *)
+      (* Use fib_mono to chain: fib (j-2) < fib (j-1) < fib j *)
+      replace (S (S (S (S j'))) - 2) with (S (S j')) in Hfib_lt by lia.
+      (* Apply fib_mono with n = S (S j') to get fib (S (S j')) < fib (S (S (S j'))) *)
+      assert (H1: fib (S (S j')) < fib (S (S (S j')))).
+      { apply fib_mono. right. lia. }
+      (* Apply fib_mono with n = S (S (S j')) to get fib (S (S (S j'))) < fib (S (S (S (S j')))) *)
+      assert (H2: fib (S (S (S j'))) < fib (S (S (S (S j'))))).
+      { apply fib_mono. right. lia. }
+      (* Chain them: fib (S (S j')) < fib (S (S (S j'))) < fib (S (S (S (S j')))) *)
+      lia.
+  - (* Case: k = S j, so k - 1 = j *)
+    (* We have fib j < fib j, which is impossible *)
+    assert (Hk_minus_1_eq_j: k - 1 = j) by lia.
+    rewrite Hk_minus_1_eq_j in Hfib_lt.
+    lia.
+Qed.
+
+(* Specialized version for empty accumulator - the main use case *)
+Lemma zeckendorf_fuel_no_consecutive_empty : forall fuel n,
+  no_consecutive_fibs (zeckendorf_fuel fuel n []).
+Proof.
+  induction fuel as [|fuel' IH]; intro n.
+  - (* Base case: fuel = 0 *)
+    simpl. trivial.
+  - (* Inductive case: fuel = S fuel' *)
+    simpl.
+    destruct n as [|n'].
+    + (* n = 0 *) constructor.
+    + (* n = S n' *)
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Hfibs.
+      * (* fibs_upto is empty *) constructor.
+      * (* fibs_upto = rev(...) = x :: xs *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n', so we add x to the result *)
+           simpl. split.
+           ++ (* Show: forall y in recursive result, x and y are not consecutive fibs *)
+              intros y Hy i j Hx Hy_fib Hcons.
+
+              (* Step 1: x is a Fibonacci number from fibs_upto *)
+              assert (Hx_is_fib: exists k, k >= 2 /\ fib k = x /\ S n' < fib (S k)).
+              { admit. }
+              destruct Hx_is_fib as [k [Hk_ge [Hfib_k Hn_lt_fib_Sk]]].
+
+              (* Step 2: i = k by Fibonacci equality *)
+              assert (Hi_eq_k: i = k).
+              { admit. }
+              subst k. clear Hx.
+
+              (* Step 3: Case split on x < S n' or x = S n' *)
+              apply Nat.leb_le in Hleb.
+              assert (Hx_lt_or_eq: x < S n' \/ x = S n') by lia.
+              destruct Hx_lt_or_eq as [Hx_lt | Hx_eq].
+              { (* Case: x < S n' *)
+                assert (Hremainder: S n' - x < fib (i - 1)).
+                { rewrite <- Hfib_k.
+                  apply remainder_less_than_prev_fib.
+                  - exact Hk_ge.
+                  - rewrite Hfib_k. exact Hx_lt.
+                  - exact Hn_lt_fib_Sk. }
+
+                (* Step 4: y is bounded *)
+                assert (Hy_bound: y <= S n' - x).
+                { apply zeckendorf_fuel_elements_bounded with (fuel := fuel') (acc := []).
+                  - exact Hy.
+                  - intro Hfalse. inversion Hfalse. }
+
+                (* Step 5: fib j < fib (i - 1) *)
+                rewrite <- Hy_fib in Hy_bound.
+                assert (Hfib_j_lt: fib j < fib (i - 1)) by lia.
+
+                (* Step 6: Apply key lemma! *)
+                apply (fib_lt_prev_implies_not_consecutive i j Hfib_j_lt Hcons).
+              }
+              { (* Case: x = S n', so S n' - x = 0 *)
+                subst x.
+                (* We have Hx_eq : fib i = S n', so rewrite fib i to S n' in Hy *)
+                rewrite Hx_eq in Hy.
+                simpl in Hy.
+                (* Now the match should have simplified to n' - n' = 0 *)
+                replace (n' - n') with 0 in Hy by lia.
+                (* Now Hy : In y (zeckendorf_fuel fuel' 0 []) *)
+                (* zeckendorf_fuel with 0 always returns [] *)
+                destruct fuel' eqn:Hfuel.
+                - simpl in Hy. inversion Hy.
+                - simpl in Hy. inversion Hy.
+              }
+
+           ++ (* Show: no_consecutive_fibs (recursive result) *)
+              apply IH.
+        -- (* x > S n', return [] *)
+           constructor.
+Admitted.
+
+(* General version with accumulator - requires additional invariants *)
 Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
   no_consecutive_fibs acc ->
   (forall z, In z acc -> exists k, z = fib k) ->
   no_consecutive_fibs (zeckendorf_fuel fuel n acc).
 Proof.
-  (* This lemma requires a stronger induction hypothesis that tracks the relationship
-     between elements being added and the accumulator.
-
-     The proof strategy is:
-     1. For result x :: zeckendorf_fuel fuel' (n-x) acc, we need to show:
-        a) x is not consecutive with any element in the recursive result
-        b) The recursive result has no consecutive fibs (by IH)
-
-     2. For part (a), we need to show:
-        - If x = fib(i) is from fibs_upto n with x < n, then n < fib(i+1) (largest_fib_in_fibs_upto)
-        - By remainder_less_than_prev_fib: n - x < fib(i-1)
-        - Any Fibonacci y in the recursive result either:
-          * Comes from acc (and we need an invariant saying acc elements aren't consecutive with x)
-          * Comes from decomposing (n-x), so y is a Fib <= (n-x) < fib(i-1)
-            Therefore y = fib(j) with j <= i-2, so not consecutive with i
-
-     The missing piece is an invariant about acc: we need to know that elements in acc
-     are "small enough" that they won't be consecutive with x. This requires strengthening
-     the lemma to track this property.
-
-     For now, we admit this as it requires significant restructuring of the invariant. *)
+  (* For now, admit the general case. The specialized case above for acc = []
+     is the main use case and demonstrates the proof strategy. To complete the
+     general case, we would need to add an invariant that acc elements are
+     bounded appropriately relative to n. *)
 Admitted.
 
 (*
@@ -1006,7 +1129,7 @@ Proof.
   (* Case split: j = i + 1 or j > i + 1 *)
   destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
   - (* j = S i: use fib_mono directly *)
-    subst j'. apply fib_mono. assumption.
+    subst j'. apply fib_mono. right. assumption.
   - (* j > S i: use transitivity *)
     assert (Hj_gt: j' > S i) by lia.
     assert (Hpred_ge: j' - 1 >= 2) by lia.
@@ -1023,7 +1146,7 @@ Proof.
       (* Use fib_mono to get fib (j' - 1) < fib j' *)
       assert (H2: fib (j' - 1) < fib j').
       { replace j' with (S (j' - 1)) at 2 by lia.
-        apply fib_mono. assumption. }
+        apply fib_mono. right. assumption. }
       (* Combine by transitivity *)
       lia.
 Qed.
