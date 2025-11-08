@@ -882,6 +882,25 @@ Qed.
   x = fib(i), we have n < fib(i+1).
 
   This captures the "greedy" property: x is the largest Fibonacci <= n.
+
+  Proof strategy (following the wiki proof structure):
+  - fibs_upto n = takeWhile (<=n) [fib 1, fib 2, ..., fib (n+1)]
+  - Since Fibonacci is monotonically increasing (fib_mono), takeWhile
+    includes all fib k where fib k <= n, and stops at the first fib k > n
+  - If x = fib i is the last element included (head of reversed list),
+    then fib i <= n and fib (S i) > n
+  - Given x < n, we want to show n < fib (S i)
+
+  The proof requires detailed reasoning about the interaction between
+  takeWhile, map, and seq, which is technically involved but standard.
+
+  Key sub-lemmas needed:
+  1. If S i <= S n, then fib (S i) is in the source sequence
+  2. If fib (S i) <= n and is in the source, then it's in fibs_upto n
+  3. If both fib i and fib (S i) are in fibs_upto n, then fib i is not maximal
+  4. If S i > S n, then we can bound n < fib (S i) using growth properties
+
+  For now, we admit this as a standard property of the greedy algorithm.
 *)
 Lemma largest_fib_in_fibs_upto : forall x i n xs,
   i >= 2 ->
@@ -890,22 +909,10 @@ Lemma largest_fib_in_fibs_upto : forall x i n xs,
   x < n ->
   n < fib (S i).
 Proof.
-  (* This requires reasoning about takeWhile on monotonic sequences.
-     The intuition: fibs_upto n = takeWhile (<=n) [fib 1, fib 2, fib 3, ...]
-     Since Fibonacci is monotonic increasing, takeWhile stops at the first
-     Fibonacci > n. So the last element taken (= first element of reversed list)
-     is the largest Fibonacci <= n, call it fib(i). The next Fibonacci fib(i+1)
-     must be > n (otherwise it would have been included).
-
-     A complete proof would require:
-     1. Proving map fib (seq 1 (S n)) contains fib 1 through fib n in order
-     2. Proving Fibonacci is monotonic (we have this: fib_mono)
-     3. Proving takeWhile on a monotonic sequence with a monotonic predicate
-        has the property that if it includes fib k, then either:
-        - fib (k+1) is not in the source list, OR
-        - fib (k+1) fails the predicate
-
-     For now, we admit this as it's a standard property of the greedy algorithm. *)
+  intros x i n xs Hi Hx Hrev Hxn.
+  (* The proof follows from the properties of takeWhile on monotonic sequences.
+     Since fibs_upto n stops including elements when they exceed n, and fib i
+     is the last element included, fib (S i) must exceed n. *)
 Admitted.
 
 (*
@@ -914,32 +921,119 @@ Admitted.
   ==============================================================================
 *)
 
+(*
+  Helper lemma: If y is a Fibonacci number and y < fib(k-1) for k >= 3,
+  then y = fib(j) for some j <= k-2, so y is not consecutive with fib(k).
+*)
+Lemma fib_lt_prev_implies_not_consecutive : forall y k j,
+  k >= 3 ->
+  fib j = y ->
+  y < fib (k - 1) ->
+  j >= 2 ->
+  ~nat_consecutive k j.
+Proof.
+  intros y k j Hk Hfib_y Hlt Hj.
+  unfold nat_consecutive.
+  (* If nat_consecutive k j, then |k - j| = 1, so k = j+1 or j = k+1 *)
+  intros Hcons.
+  (* Since j >= 2 and k >= 3, we need to analyze the cases *)
+  assert (Hcase: k = S j \/ j = S k \/ (k > S j /\ j > S k)) by lia.
+  destruct Hcase as [Hcase1 | [Hcase2 | Hcase3]].
+  - (* Case k = S j, i.e., k = j + 1 *)
+    (* Then fib (k - 1) = fib j = y *)
+    subst k.
+    replace (S j - 1) with j in Hlt by lia.
+    rewrite <- Hfib_y in Hlt.
+    (* But y < fib j contradicts y = fib j *)
+    lia.
+  - (* Case j = S k, i.e., j = k + 1, but k >= 3 and j >= 2 *)
+    (* This means j > k, but we need |k - j| = 1, so j = k + 1 *)
+    subst j.
+    (* Then fib (S k) = y and y < fib (k - 1) *)
+    (* But for k >= 3, fib (S k) > fib (k - 1) by Fibonacci growth *)
+    (* First show fib k < fib (S k) *)
+    assert (Hmono2: fib k < fib (S k)).
+    { apply fib_mono. lia. }
+    (* Now we need fib (k-1) < fib k *)
+    (* When k >= 3, k-1 >= 2, so we can use fib_mono *)
+    assert (Hmono1: fib (k - 1) < fib k).
+    { destruct k as [|[|[|k']]].
+      - (* k = 0, contradicts k >= 3 *) lia.
+      - (* k = 1, contradicts k >= 3 *) lia.
+      - (* k = 2, contradicts k >= 3 *) lia.
+      - (* k >= 3, so k-1 >= 2 *)
+        apply fib_mono. lia. }
+    rewrite Hfib_y in Hmono2.
+    (* So fib(k-1) < fib k < y, contradicting y < fib(k-1) *)
+    lia.
+  - (* Case k and j differ by more than 1, contradicts nat_consecutive *)
+    lia.
+Qed.
+
+(*
+  Stronger invariant: Elements in acc are all < fib (k-1) for some k
+*)
 Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
   no_consecutive_fibs acc ->
   (forall z, In z acc -> exists k, z = fib k) ->
   no_consecutive_fibs (zeckendorf_fuel fuel n acc).
 Proof.
-  (* This lemma requires a stronger induction hypothesis that tracks the relationship
-     between elements being added and the accumulator.
+  (* Induction on fuel *)
+  induction fuel as [|fuel' IH]; intros n acc Hnocons_acc Hacc_fib.
+  - (* Base case: fuel = 0, returns acc unchanged *)
+    simpl. exact Hnocons_acc.
+  - (* Inductive case: fuel = S fuel' *)
+    simpl.
+    destruct n as [|n'].
+    + (* n = 0, returns acc *)
+      exact Hnocons_acc.
+    + (* n = S n' > 0 *)
+      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Hfibs.
+      * (* fibs_upto is empty, returns acc *)
+        exact Hnocons_acc.
+      * (* x is the largest Fibonacci <= S n' *)
+        destruct (Nat.leb x (S n')) eqn:Hleb.
+        -- (* x <= S n', so we add x to the result *)
+           (* Result is x :: zeckendorf_fuel fuel' (S n' - x) acc *)
+           (* We need to show this has no consecutive Fibs *)
+           (* This requires showing:
+              1. x is not consecutive with any element in the recursive result
+              2. The recursive result has no consecutive Fibs (by IH) *)
 
-     The proof strategy is:
-     1. For result x :: zeckendorf_fuel fuel' (n-x) acc, we need to show:
-        a) x is not consecutive with any element in the recursive result
-        b) The recursive result has no consecutive fibs (by IH)
+           (* The proof requires knowing properties of x and the recursive result.
+              Key properties needed:
+              - x = fib(i) for some i >= 2
+              - If x < S n', then S n' < fib(i+1) (by largest_fib_in_fibs_upto)
+              - Therefore S n' - x < fib(i-1) (by remainder_less_than_prev_fib)
+              - Any Fibonacci y in zeckendorf_fuel fuel' (S n' - x) acc is either:
+                * From acc, or
+                * From decomposing (S n' - x), so y <= S n' - x < fib(i-1)
+                Therefore y = fib(j) with j <= i-2, not consecutive with i
 
-     2. For part (a), we need to show:
-        - If x = fib(i) is from fibs_upto n with x < n, then n < fib(i+1) (largest_fib_in_fibs_upto)
-        - By remainder_less_than_prev_fib: n - x < fib(i-1)
-        - Any Fibonacci y in the recursive result either:
-          * Comes from acc (and we need an invariant saying acc elements aren't consecutive with x)
-          * Comes from decomposing (n-x), so y is a Fib <= (n-x) < fib(i-1)
-            Therefore y = fib(j) with j <= i-2, so not consecutive with i
+              The difficulty is that we don't have direct access to the index i,
+              and we need to track the relationship between x and elements in acc.
 
-     The missing piece is an invariant about acc: we need to know that elements in acc
-     are "small enough" that they won't be consecutive with x. This requires strengthening
-     the lemma to track this property.
+              This requires a more sophisticated invariant than we currently have.
+              We would need to prove a stronger version of this lemma that tracks
+              upper bounds on elements in acc.
 
-     For now, we admit this as it requires significant restructuring of the invariant. *)
+              Following the wiki proof structure, this is the key step in the
+              existence proof, corresponding to lines 7 of wiki proof.txt:
+              "since b = n − F_j < F_{j+1} − F_j = F_{j−1}, the Zeckendorf
+              representation of b does not contain F_{j−1}, and hence also does
+              not contain F_j"
+
+              For now, we admit this as it requires restructuring with a stronger
+              invariant. *)
+           admit.
+        -- (* x > S n', contradiction since x is from fibs_upto S n' *)
+           (* This case is impossible *)
+           exfalso.
+           assert (Hin_x: In x (fibs_upto (S n'))).
+           { apply in_rev. rewrite Hfibs. left. reflexivity. }
+           assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
+           apply Nat.leb_gt in Hleb.
+           lia.
 Admitted.
 
 (*
