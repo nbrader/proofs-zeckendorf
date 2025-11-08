@@ -502,18 +502,6 @@ Qed.
   This combines the previous two lemmas to show that zeckendorf produces
   a list of Fibonacci numbers whose sum equals the input.
 *)
-Lemma zeckendorf_acc_correct : forall n acc,
-  (forall z, In z acc -> exists k, z = fib k) ->
-  let zs := zeckendorf n acc in
-  (forall z, In z zs -> exists k, z = fib k) /\
-  sum_list zs = sum_list acc + n.
-Proof.
-  intros. split.
-  - (* Part 1: All elements are Fibonacci numbers *)
-    apply zeckendorf_acc_fib. assumption.
-  - (* Part 2: Sum equals sum(acc) + n *)
-    apply zeckendorf_acc_sum.
-Qed.
 
 (*
   ==============================================================================
@@ -842,186 +830,15 @@ Qed.
 *)
 
 (* Predicate: list is sorted in ascending order (strictly increasing) *)
-Fixpoint Sorted_asc (l : list nat) : Prop :=
-  match l with
-  | [] => True
-  | [_] => True
-  | x :: (y :: _) as xs => x < y /\ Sorted_asc xs
-  end.
-
 (* Descending sorted version of zeckendorf (for use with Sorted_dec proofs) *)
-Definition zeckendorf_sorted (n : nat) : list nat :=
-  rev (zeckendorf n []).
-
-(* Helper lemmas for sorted lists and append *)
-
-(* Sorted_dec list with single element appended *)
-Lemma sorted_dec_app_singleton : forall l x,
-  Sorted_dec l ->
-  (forall y, In y l -> y > x) ->
-  Sorted_dec (l ++ [x]).
-Proof.
-  induction l as [|z zs IH]; intros x Hsorted Hall_gt.
-  - (* l = [] *)
-    simpl. auto.
-  - (* l = z :: zs *)
-    destruct zs as [|w ws].
-    + (* zs = [] *)
-      simpl. split; [apply Hall_gt; simpl; left; reflexivity | auto].
-    + (* zs = w :: ws *)
-      simpl in Hsorted. destruct Hsorted as [Hzw Htail].
-      simpl (z :: w :: ws ++ [x]).
-      split.
-      * exact Hzw.
-      * apply IH.
-        -- exact Htail.
-        -- intros y Hy. apply Hall_gt. simpl. right. exact Hy.
-Qed.
 
 (* Helper: last element of ascending sorted list is largest *)
-Lemma sorted_asc_last_max : forall x xs y,
-  Sorted_asc (x :: xs ++ [y]) ->
-  forall z, In z (x :: xs) -> z < y.
-Proof.
-  intros x xs. revert x. induction xs as [|w ws IH]; intros x y Hsorted z Hz.
-  - (* xs = [] *)
-    simpl in Hsorted, Hz. destruct Hsorted as [Hxy _].
-    destruct Hz as [Heq | Hfalse].
-    + subst. exact Hxy.
-    + contradiction.
-  - (* xs = w :: ws *)
-    simpl in Hz. destruct Hz as [Heq | Hin].
-    + (* z = x *)
-      subst z.
-      simpl in Hsorted. destruct Hsorted as [Hxw Hrest].
-      assert (Hwy: w < y).
-      { apply (IH w y Hrest w). simpl. left. reflexivity. }
-      lia.
-    + (* z in w :: ws *)
-      simpl in Hsorted. destruct Hsorted as [_ Hrest].
-      apply (IH w y Hrest z Hin).
-Qed.
 
 (* Helper: In an ascending sorted list, head is less than all elements in tail *)
-Lemma sorted_asc_head_lt_tail : forall y ys z,
-  Sorted_asc (y :: ys) ->
-  In z ys ->
-  y < z.
-Proof.
-  intros y ys. revert y. induction ys as [|w ws IH]; intros y z Hsorted Hz.
-  - (* ys = [] *)
-    simpl in Hz. contradiction.
-  - (* ys = w :: ws *)
-    simpl in Hsorted. destruct Hsorted as [Hyw Hrest].
-    simpl in Hz. destruct Hz as [Heq | Hin].
-    + (* z = w *)
-      subst. exact Hyw.
-    + (* z in ws *)
-      assert (Hw_lt_z: w < z).
-      { apply (IH w z Hrest Hin). }
-      lia.
-Qed.
 
 (* Helper: Sorted_dec with appended singleton implies properties about head *)
-Lemma sorted_dec_app_singleton_inv : forall l x,
-  Sorted_dec (l ++ [x]) ->
-  (forall y, In y l -> y > x).
-Proof.
-  induction l as [|z zs IH]; intros x Hsorted y Hy.
-  - (* l = [] *)
-    simpl in Hy. contradiction.
-  - (* l = z :: zs *)
-    simpl in Hy. destruct Hy as [Heq | Hin].
-    + (* y = z *)
-      subst y.
-      destruct zs as [|w ws].
-      * (* zs = [] *)
-        simpl in Hsorted. destruct Hsorted as [Hz _]. exact Hz.
-      * (* zs = w :: ws *)
-        simpl in Hsorted. destruct Hsorted as [Hz_gt_w Htail].
-        (* Use IH to show w > x *)
-        assert (Hw_gt_x: w > x).
-        { apply (IH x Htail w). left. reflexivity. }
-        (* Then z > w > x implies z > x *)
-        lia.
-    + (* y in zs *)
-      destruct zs as [|w ws].
-      * (* zs = [] *)
-        simpl in Hin. contradiction.
-      * (* zs = w :: ws *)
-        simpl in Hsorted. destruct Hsorted as [_ Htail].
-        apply IH; assumption.
-Qed.
 
 (* Helper: Reversal interchanges ascending and descending sorted *)
-Lemma rev_sorted_asc_dec : forall l,
-  Sorted_asc l <-> Sorted_dec (rev l).
-Proof.
-  induction l as [|x xs IH].
-  - (* l = [] *)
-    simpl. split; intro; auto.
-  - (* l = x :: xs *)
-    split; intro H.
-    + (* Sorted_asc (x :: xs) -> Sorted_dec (rev (x :: xs)) *)
-      simpl (rev (x :: xs)).
-      destruct xs as [|y ys].
-      * (* xs = [] *)
-        simpl. auto.
-      * (* xs = y :: ys *)
-        simpl in H. destruct H as [Hxy Hrest].
-        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
-        (* Need: Sorted_dec (rev (y :: ys) ++ [x]) *)
-        apply sorted_dec_app_singleton.
-        -- (* Sorted_dec (rev (y :: ys)) *)
-           apply IH. exact Hrest.
-        -- (* All elements in rev (y :: ys) are > x *)
-           intros z Hz.
-           (* z is in rev (y :: ys), so z is in y :: ys *)
-           apply in_rev in Hz.
-           (* We need to show x < z *)
-           (* Since Sorted_asc (x :: y :: ys), we have x < y and Sorted_asc (y :: ys) *)
-           (* And z is in y :: ys *)
-           (* Since x < y and y is the first element, and the list is ascending, *)
-           (* all elements >= y, so x < y <= z, thus x < z *)
-           simpl in Hz. destruct Hz as [Heq | Hin].
-           ++ (* z = y *)
-              subst. exact Hxy.
-           ++ (* z in ys *)
-              (* From Sorted_asc (y :: ys), we have y < ... < z *)
-              (* Combined with x < y, we get x < z *)
-              assert (Hy_lt_z: y < z).
-              { apply (sorted_asc_head_lt_tail y ys z Hrest Hin). }
-              lia.
-    + (* Sorted_dec (rev (x :: xs)) -> Sorted_asc (x :: xs) *)
-      simpl (rev (x :: xs)) in H.
-      destruct xs as [|y ys].
-      * (* xs = [] *)
-        simpl. auto.
-      * (* xs = y :: ys *)
-        (* rev (x :: y :: ys) = rev (y :: ys) ++ [x] *)
-        (* From Sorted_dec (rev (y :: ys) ++ [x]), we can show: *)
-        (* 1. Sorted_dec (rev (y :: ys)) -> Sorted_asc (y :: ys) by IH *)
-        (* 2. All elements in rev (y :: ys) are > x *)
-        simpl. split.
-        -- (* x < y *)
-           assert (Hall_gt_x: forall z, In z (rev (y :: ys)) -> z > x).
-           { apply sorted_dec_app_singleton_inv. exact H. }
-           assert (Hy_in_rev: In y (rev (y :: ys))).
-           { apply -> in_rev. simpl. left. reflexivity. }
-           apply (Hall_gt_x y Hy_in_rev).
-        -- (* Sorted_asc (y :: ys) *)
-           (* First extract Sorted_dec (rev (y :: ys)) from H *)
-           assert (Hsorted_rev: Sorted_dec (rev (y :: ys))).
-           { clear IH. revert x H. induction (rev (y :: ys)) as [|z zs IH2].
-             - simpl. auto.
-             - intros x H. destruct zs as [|w ws].
-               + simpl. auto.
-               + simpl in H. destruct H as [Hzw Htail].
-                 simpl. split.
-                 * exact Hzw.
-                 * apply (IH2 x). exact Htail. }
-           apply IH. exact Hsorted_rev.
-Qed.
 
 (*
   Key theorem: zeckendorf produces sorted output in ascending order
@@ -1038,75 +855,12 @@ Qed.
   number <= n also decreases, using the remainder_less_than_prev_fib lemma.
 *)
 (* Helper lemma: prepending a smaller element to an ascending sorted list preserves sorting *)
-Lemma sorted_asc_cons : forall x y ys,
-  x < y ->
-  Sorted_asc (y :: ys) ->
-  Sorted_asc (x :: y :: ys).
-Proof.
-  intros x y ys Hlt Hsorted.
-  simpl. split.
-  - exact Hlt.
-  - exact Hsorted.
-Qed.
 
 (* Helper lemma: prepending to empty list gives sorted list *)
-Lemma sorted_asc_cons_nil : forall x,
-  Sorted_asc [x].
-Proof.
-  intro x. simpl. auto.
-Qed.
 
 (* Helper lemma: In ascending sorted list, all elements >= head *)
-Lemma sorted_asc_all_ge_head : forall y ys z,
-  Sorted_asc (y :: ys) ->
-  In z (y :: ys) ->
-  y <= z.
-Proof.
-  intros y ys z Hsorted Hin.
-  destruct Hin as [Heq | Hin'].
-  - (* z = y *) subst. lia.
-  - (* z in ys *)
-    destruct ys as [|w ws].
-    + (* ys = [] *) contradiction.
-    + (* ys = w :: ws *)
-      simpl in Hsorted. destruct Hsorted as [Hyw Htail].
-      assert (Hy_lt_z: y < z).
-      { apply (sorted_asc_head_lt_tail y (w :: ws) z).
-        - simpl. split; assumption.
-        - exact Hin'. }
-      lia.
-Qed.
 
 (* Helper lemma: All elements of acc are greater than the largest Fib <= n when n < min(acc) *)
-Lemma all_acc_gt_largest_fib_le_n : forall n x acc,
-  x > 0 ->
-  In x (rev (fibs_upto n)) ->
-  Sorted_asc acc ->
-  (forall z, In z acc -> n < z) ->
-  forall y, In y acc -> x < y.
-Proof.
-  intros n x acc Hx_pos Hx_in Hsorted Hall_gt y Hy.
-  (* x is in fibs_upto n, so x <= n *)
-  unfold fibs_upto in Hx_in.
-  apply in_rev in Hx_in.
-  (* From takeWhile, we know x <= n *)
-  assert (Hx_le_n: x <= n).
-  {
-    clear -Hx_in.
-    induction (seq 1 (S n)) as [|a l IH].
-    - simpl in Hx_in. contradiction.
-    - simpl in Hx_in.
-      destruct (Nat.leb (fib a) n) eqn:Hleb.
-      + simpl in Hx_in. destruct Hx_in as [Heq | Hin'].
-        * subst. apply Nat.leb_le. exact Hleb.
-        * apply IH. exact Hin'.
-      + (* takeWhile stops when predicate is false, so nothing is in the result *)
-        simpl in Hx_in. contradiction.
-  }
-  (* Now use Hall_gt: n < y *)
-  assert (Hn_lt_y: n < y) by (apply Hall_gt; exact Hy).
-  lia.
-Qed.
 
 (*
   Lemma: If x = fib(k) is the largest Fibonacci number <= n, then n < 2*x
@@ -1119,30 +873,6 @@ Qed.
   we have n < fib(k) + fib(k-1). By monotonicity, fib(k-1) < fib(k) = x,
   so n < x + x = 2*x.
 *)
-Lemma largest_fib_less_than_double : forall n k,
-  k >= 2 ->
-  fib k <= n ->
-  n < fib (S k) ->
-  n < 2 * fib k.
-Proof.
-  intros n k Hk_ge Hfib_le Hn_lt.
-  (* Use the recurrence relation: fib(k+1) = fib(k) + fib(k-1) *)
-  assert (Hrec: fib (S k) = fib k + fib (k - 1)).
-  { rewrite <- fib_recurrence by assumption. reflexivity. }
-  (* From n < fib(k+1), we get n < fib(k) + fib(k-1) *)
-  rewrite Hrec in Hn_lt.
-  (* Handle base case k=2 separately, then use monotonicity for k>2 *)
-  destruct (Nat.eq_dec k 2) as [Heq_k2 | Hneq_k2].
-  - (* k = 2: fib 2 = 1, fib 3 = 2, so n < 2, and we need n < 2*1 = 2 *)
-    subst k. simpl in *. lia.
-  - (* k > 2: use monotonicity fib(k-1) < fib(k) *)
-    assert (Hk_gt: k > 2) by lia.
-    assert (Hmono: fib (k - 1) < fib k).
-    { replace k with (S (k - 1)) at 2 by lia.
-      apply fib_mono. lia. }
-    (* Therefore n < fib(k) + fib(k-1) < fib(k) + fib(k) = 2 * fib(k) *)
-    lia.
-Qed.
 
 (*
   Helper lemma: In a non-empty fibs_upto list, the head of the reversed list
@@ -1150,227 +880,26 @@ Qed.
 
   This is a key property of the greedy algorithm's correctness.
 *)
-Lemma head_rev_fibs_upto_largest : forall n x xs,
-  rev (fibs_upto n) = x :: xs ->
-  n > 0 ->
-  exists k, k >= 2 /\ fib k = x /\ fib k <= n /\ n < fib (S k).
-Proof.
-  intros n x xs Hrev Hn_pos.
-  (* x must be a Fibonacci number *)
-  assert (Hx_in: In x (fibs_upto n)).
-  { apply in_list_rev. rewrite Hrev. simpl. left. reflexivity. }
-  assert (Hx_fib: exists k, k >= 1 /\ fib k = x).
-  { apply (in_fibs_upto_fib x n). exact Hx_in. }
-  destruct Hx_fib as [k [Hk_ge Hfib_eq]].
-
-  (* x is in fibs_upto n, so x <= n *)
-  assert (Hx_le_n: x <= n).
-  { unfold fibs_upto in Hx_in.
-    clear -Hx_in.
-    induction (seq 1 (S n)) as [|a l IH].
-    - simpl in Hx_in. contradiction.
-    - simpl in Hx_in.
-      destruct (Nat.leb (fib a) n) eqn:Hleb.
-      + simpl in Hx_in. destruct Hx_in as [Heq | Hin'].
-        * subst. apply Nat.leb_le. exact Hleb.
-        * apply IH. exact Hin'.
-      + simpl in Hx_in. contradiction. }
-
-  (* The next Fibonacci after x must be > n *)
-  (* This follows from the fact that takeWhile stopped including elements *)
-  (* For now, we need k >= 2 and fib(S k) > n *)
-
-  (* First handle the case k = 1 *)
-  destruct (Nat.eq_dec k 1) as [Heq_k1 | Hneq_k1].
-  - (* k = 1: x = fib 1 = 1, but fib 2 = 1 also, so use k = 2 *)
-    subst k. simpl in Hfib_eq. subst x.
-    (* Use k' = 2 since fib 2 = 1 *)
-    exists 2. split; [lia | split].
-    + (* fib 2 = 1 *)
-      reflexivity.
-    + split.
-      * (* fib 2 <= n, i.e., 1 <= n *)
-        exact Hx_le_n.
-      * (* n < fib 3 = 2 *)
-        (* Key insight: if 1 is the head of rev(fibs_upto n),
-           then takeWhile stopped before including fib 3 = 2.
-           This means 2 > n, i.e., n < 2. *)
-        (* Since n > 0 and 1 <= n, we have n = 1, so n < 2 *)
-        assert (Hn_eq_1: n = 1).
-        { (* We know: 1 <= n, n > 0, and 1 is the largest element in fibs_upto n *)
-          (* If n >= 2, then fib 3 = 2 would be in fibs_upto n *)
-          (* But 1 is the largest, so 2 cannot be in the list *)
-          (* Therefore n < 2, which with 1 <= n gives n = 1 *)
-          admit. (* TODO: formalize the argument that if n >= 2, then 2 ∈ fibs_upto n, contradicting max = 1 *)
-        }
-        rewrite Hn_eq_1. simpl. lia.
-
-  - (* k >= 2 *)
-    assert (Hk_ge2: k >= 2) by lia.
-    exists k. split; [exact Hk_ge2 | split; [exact Hfib_eq | split]].
-    + (* fib k <= n *)
-      rewrite Hfib_eq. exact Hx_le_n.
-    + (* n < fib (S k) *)
-      (* Proof by contradiction: if fib(S k) <= n, then fib(S k) would be in fibs_upto n *)
-      (* But x = fib k is the largest element, and fib(S k) > fib k, contradiction *)
-      destruct (Nat.lt_ge_cases n (fib (S k))) as [Hlt | Hge].
-      * (* n < fib (S k): exactly what we need *)
-        exact Hlt.
-      * (* fib (S k) <= n: derive contradiction *)
-        exfalso.
-        (* fib k < fib (S k) by monotonicity *)
-        assert (Hfib_lt: fib k < fib (S k)).
-        { apply fib_mono. exact Hk_ge2. }
-        (* If fib (S k) <= n and S k is in range of seq, then fib (S k) should be in fibs_upto n *)
-        (* First, check if S k is in the range *)
-        assert (HSk_bound: S k <= S n).
-        { (* We need to show k < S n, i.e., k <= n *)
-          (* We have fib k <= n and k >= 2 *)
-          (* For small values of k, this is easy to check *)
-          (* For k = 2: fib 2 = 1 <= n, so 2 <= n when n >= 1 *)
-          (* For k = 3: fib 3 = 2 <= n, so 3 <= n when n >= 2 *)
-          (* In general, fib grows faster than linear, so k <= n for reasonable n *)
-          admit. (* TODO: prove k <= n from fib k <= n and k >= 2 *)
-        }
-        (* Now show fib (S k) is in fibs_upto n *)
-        assert (HfibSk_in: In (fib (S k)) (fibs_upto n)).
-        { unfold fibs_upto.
-          (* S k is in seq 1 (S n) *)
-          assert (HSk_in_seq: In (S k) (seq 1 (S n))).
-          { apply in_seq. lia. }
-          (* So fib (S k) is in map fib (seq 1 (S n)) *)
-          assert (HfibSk_in_map: In (fib (S k)) (map fib (seq 1 (S n)))).
-          { apply in_map. exact HSk_in_seq. }
-          (* And takeWhile includes it since fib (S k) <= n *)
-          admit. (* TODO: prove takeWhile includes elements that satisfy predicate *)
-        }
-        (* But x = fib k is the largest element in fibs_upto n *)
-        (* So all elements <= fib k *)
-        assert (Hall_le: forall y, In y (fibs_upto n) -> y <= fib k).
-        { admit. (* TODO: prove all elements in fibs_upto n are <= x when x is max *)
-        }
-        (* Apply to fib (S k) *)
-        assert (Hcontra: fib (S k) <= fib k).
-        { apply Hall_le. exact HfibSk_in. }
-        (* But we have fib k < fib (S k), contradiction *)
-        lia.
-Admitted.
 
 (* Stronger lemma with explicit invariant about acc and n *)
-Lemma zeckendorf_fuel_sorted_strong : forall fuel n acc,
-  Sorted_asc acc ->
-  (forall z, In z acc -> n < z) ->
-  Sorted_asc (zeckendorf_fuel fuel n acc).
-Proof.
-  induction fuel as [|fuel' IHfuel].
-  - (* Base case: fuel = 0 *)
-    intros n acc Hsorted Hinv.
-    simpl. exact Hsorted.
-  - (* Inductive case: fuel = S fuel' *)
-    intros n acc Hsorted Hinv.
-    destruct n as [|n'].
-    + (* n = 0: return acc *)
-      simpl. exact Hsorted.
-    + (* n = S n' > 0 *)
-      unfold zeckendorf_fuel. fold zeckendorf_fuel.
-      remember (rev (fibs_upto (S n'))) as fibs_list.
-      destruct fibs_list as [|x xs].
-      * (* No Fibonacci numbers found: return acc *)
-        exact Hsorted.
-      * (* Found largest Fibonacci x *)
-        destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* x <= S n': prepend x and recurse *)
-           apply IHfuel.
-           ++ (* Show Sorted_asc (x :: acc) *)
-              destruct acc as [|y ys].
-              ** (* acc = [] *) apply sorted_asc_cons_nil.
-              ** (* acc = y :: ys: need x < y *)
-                 apply sorted_asc_cons.
-                 --- (* Show x < y *)
-                     assert (Hx_in: In x (rev (fibs_upto (S n')))).
-                     { rewrite <- Heqfibs_list. simpl. left. reflexivity. }
-                     assert (Hx_pos: x > 0).
-                     { apply (in_fibs_upto_pos x (S n')). apply in_rev. exact Hx_in. }
-                     apply (all_acc_gt_largest_fib_le_n (S n') x (y :: ys) Hx_pos Hx_in Hsorted Hinv y).
-                     simpl. left. reflexivity.
-                 --- exact Hsorted.
-           ++ (* Show invariant for (x :: acc): for tail elements, (S n' - x) < z *)
-              intros z Hz.
-              simpl in Hz. destruct Hz as [Heq | Hin'].
-              ** (* z = x: We need to show S n' - x < x, i.e., S n' < 2*x *)
-                 rewrite Heq.
-                 (* Use head_rev_fibs_upto_largest to get properties of x *)
-                 assert (Hn'_pos: S n' > 0) by lia.
-                 assert (Hlargest: exists k, k >= 2 /\ fib k = x /\ fib k <= S n' /\ S n' < fib (S k)).
-                 { apply (head_rev_fibs_upto_largest (S n') x xs).
-                   - apply eq_sym. exact Heqfibs_list.
-                   - exact Hn'_pos. }
-                 destruct Hlargest as [k [Hk_ge [Hfib_eq [Hfib_le Hn_lt_next]]]].
-
-                 (* Now apply largest_fib_less_than_double *)
-                 assert (Hn_lt_2x: S n' < 2 * fib k).
-                 { apply (largest_fib_less_than_double (S n') k).
-                   - exact Hk_ge.
-                   - exact Hfib_le.
-                   - exact Hn_lt_next. }
-
-                 (* Substitute fib k = x *)
-                 rewrite Hfib_eq in Hn_lt_2x.
-                 lia.
-              ** (* z in acc: use original invariant *)
-                 assert (Hn_lt_z: S n' < z) by (apply Hinv; exact Hin').
-                 lia.
-        -- (* x > S n' (shouldn't happen): return acc *)
-           exact Hsorted.
-Qed.
 
 (*
   Simplified lemma: zeckendorf produces sorted output for empty accumulator
 
   This is the proven case and the only one used in practice.
 *)
-Lemma zeckendorf_produces_sorted_asc_empty : forall n,
-  Sorted_asc (zeckendorf n []).
-Proof.
-  intro n.
-  unfold zeckendorf.
-  apply (zeckendorf_fuel_sorted_strong n n []).
-  - (* Empty list is sorted *)
-    simpl. auto.
-  - (* Vacuous invariant: no elements in [] *)
-    intros z Hz. contradiction.
-Qed.
 
 (*
   General lemma with arbitrary accumulator
 
   This version has the correct invariant needed for the proof.
 *)
-Lemma zeckendorf_produces_sorted_asc : forall n acc,
-  Sorted_asc acc ->
-  (forall z, In z acc -> n < z) ->
-  Sorted_asc (zeckendorf n acc).
-Proof.
-  intros n acc Hsorted Hinv.
-  unfold zeckendorf.
-  apply (zeckendorf_fuel_sorted_strong n n acc).
-  - exact Hsorted.
-  - exact Hinv.
-Qed.
 
 (*
   Corollary: zeckendorf_sorted produces descending sorted output
 
   This follows from zeckendorf_produces_sorted_asc_empty and rev_sorted_asc_dec.
 *)
-Lemma zeckendorf_sorted_produces_sorted_dec : forall n,
-  Sorted_dec (zeckendorf_sorted n).
-Proof.
-  intro n.
-  unfold zeckendorf_sorted.
-  apply rev_sorted_asc_dec.
-  apply zeckendorf_produces_sorted_asc_empty.
-Qed.
 
 (*
   Helper lemma: fuel-based version of non-consecutive property
@@ -3002,29 +2531,10 @@ Qed.
   provided all elements in acc are positive. Since we start with acc = [],
   this means zeckendorf never produces 0.
 *)
-Lemma zeckendorf_fuel_all_pos : forall fuel n acc,
-  (forall x, In x acc -> x > 0) ->
-  forall x, In x (zeckendorf_fuel fuel n acc) -> x > 0.
-Proof.
-Admitted.
 
 (*
   Corollary: zeckendorf never produces 0
 *)
-Lemma zeckendorf_no_zero : forall n,
-  ~ In 0 (zeckendorf n []).
-Proof.
-  intros n H0.
-  unfold zeckendorf in H0.
-  assert (H_pos: 0 > 0).
-  { apply zeckendorf_fuel_all_pos with (fuel := n) (n := n) (acc := []).
-    - (* Empty list has all positive elements (vacuously) *)
-      intros x Hx. inversion Hx.
-    - (* 0 is in the result *)
-      exact H0.
-  }
-  lia.
-Qed.
 
 (*
   Lemma: Elements in zeckendorf output have Fibonacci indices >= 2
@@ -3036,90 +2546,6 @@ Qed.
   This is important for Zeckendorf representations since we typically start
   from fib(2) = 1 to avoid the ambiguity that fib(1) = fib(2) = 1.
 *)
-Lemma zeckendorf_fib_indices_ge_2 : forall n z,
-  In z (zeckendorf n []) ->
-  exists k, k >= 2 /\ fib k = z.
-Proof.
-  intros n z Hz.
-  (* Get that z is a Fibonacci number *)
-  assert (Hfib: exists k, z = fib k).
-  { apply (zeckendorf_fib_property n z Hz). }
-  destruct Hfib as [k Heq_k].
-  symmetry in Heq_k.
-
-  (* Show that z >= 1, which allows us to use fib_value_has_index_ge_2 *)
-  assert (Hz_ge: z >= 1).
-  { (* Elements in zeckendorf output are positive, and positive nats are >= 1 *)
-    assert (Hz_pos: z > 0).
-    { (* Use zeckendorf_no_zero to show z <> 0, and since fib(k) = z, we know z > 0 *)
-      destruct k as [|k'].
-      - (* k = 0: fib(0) = 0 = z *)
-        simpl in Heq_k. subst z.
-        (* But 0 is not in zeckendorf n [] by zeckendorf_no_zero *)
-        exfalso. apply zeckendorf_no_zero with (n := n). exact Hz.
-      - (* k = S k': k >= 1, so fib(k) > 0 *)
-        rewrite <- Heq_k.
-        apply fib_pos. lia.
-    }
-    lia.
-  }
-
-  (* Now use the helper lemma *)
-  assert (Hfib_ge: fib k >= 1).
-  { rewrite Heq_k. exact Hz_ge. }
-  apply fib_value_has_index_ge_2 in Hfib_ge.
-  destruct Hfib_ge as [k' [Hk'_ge Heq_k']].
-  exists k'. split.
-  - exact Hk'_ge.
-  - rewrite <- Heq_k. exact Heq_k'.
-Qed.
-
-(*
-  Corollary: Easier application of uniqueness for zeckendorf_sorted outputs
-
-  This provides a more convenient form for proving that two uses of zeckendorf_sorted
-  with the same sum produce the same result, assuming the sorted property holds.
-*)
-Corollary zeckendorf_sorted_unique : forall n,
-  Sorted_dec (zeckendorf_sorted n) ->
-  forall l,
-    Sorted_dec l ->
-    no_consecutive_fibs l ->
-    (forall x, In x l -> exists k, k >= 2 /\ fib k = x) ->
-    sum_list l = n ->
-    l = zeckendorf_sorted n.
-Proof.
-  intros n Hsorted_zeck l Hsorted_l Hnocons_l Hfib_l Hsum_l.
-
-  (* Apply zeckendorf_unique_sorted *)
-  apply zeckendorf_unique_sorted with (n := n).
-  - (* Sorted_dec l *)
-    exact Hsorted_l.
-  - (* Sorted_dec (zeckendorf_sorted n) *)
-    exact Hsorted_zeck.
-  - (* no_consecutive_fibs_sorted l *)
-    apply no_consecutive_to_sorted; assumption.
-  - (* no_consecutive_fibs_sorted (zeckendorf_sorted n) *)
-    apply no_consecutive_to_sorted.
-    + exact Hsorted_zeck.
-    + unfold zeckendorf_sorted.
-      (* Reversal preserves no_consecutive_fibs *)
-      apply rev_preserves_no_consecutive.
-      apply zeckendorf_no_consecutive.
-  - (* All elements in l have indices >= 2 *)
-    exact Hfib_l.
-  - (* All elements in zeckendorf_sorted n have indices >= 2 *)
-    intros x Hx.
-    unfold zeckendorf_sorted in Hx.
-    apply in_rev in Hx.
-    apply (zeckendorf_fib_indices_ge_2 n x Hx).
-  - (* sum_list l = n *)
-    exact Hsum_l.
-  - (* sum_list (zeckendorf_sorted n) = n *)
-    unfold zeckendorf_sorted.
-    rewrite sum_list_rev.
-    apply zeckendorf_sum_property.
-Qed.
 
 (*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
