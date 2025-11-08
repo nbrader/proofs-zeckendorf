@@ -1182,13 +1182,27 @@ Proof.
 
   (* First handle the case k = 1 *)
   destruct (Nat.eq_dec k 1) as [Heq_k1 | Hneq_k1].
-  - (* k = 1: x = fib 1 = 1 *)
+  - (* k = 1: x = fib 1 = 1, but fib 2 = 1 also, so use k = 2 *)
     subst k. simpl in Hfib_eq. subst x.
-    (* If x = 1 is the largest Fib <= n, then n < fib 2 = 1, but n > 0,
-       so n = 1, which means fib 2 = 1 is not > n. Contradiction. *)
-    (* Actually fib 2 = 1 also, so we need to check fib 3 = 2 *)
-    (* If rev (fibs_upto n) = 1 :: xs and n >= 2, then 2 should also be in the list *)
-    admit. (* Need to prove that if n >= 2, then fibs_upto n contains fib 3 = 2 *)
+    (* Use k' = 2 since fib 2 = 1 *)
+    exists 2. split; [lia | split].
+    + (* fib 2 = 1 *)
+      reflexivity.
+    + split.
+      * (* fib 2 <= n, i.e., 1 <= n *)
+        exact Hx_le_n.
+      * (* n < fib 3 = 2 *)
+        (* Key insight: if 1 is the head of rev(fibs_upto n),
+           then takeWhile stopped before including fib 3 = 2.
+           This means 2 > n, i.e., n < 2. *)
+        (* Since n > 0 and 1 <= n, we have n = 1, so n < 2 *)
+        assert (Hn_eq_1: n = 1).
+        { (* We know 1 <= n and n > 0 *)
+          (* If n >= 2, then n < fib 3 wouldn't hold as required *)
+          (* So we need to show n = 1 *)
+          admit. (* TODO: prove from structure of fibs_upto that n must be 1 *)
+        }
+        rewrite Hn_eq_1. simpl. lia.
 
   - (* k >= 2 *)
     assert (Hk_ge2: k >= 2) by lia.
@@ -1290,25 +1304,19 @@ Qed.
 (*
   General lemma with arbitrary accumulator
 
-  NOTE: This general version is admitted because the hypotheses are insufficient.
-  To prove it, would need: (forall z, In z acc -> n < z) as an additional hypothesis.
-  However, this is never needed - all uses pass acc = [].
+  This version has the correct invariant needed for the proof.
 *)
 Lemma zeckendorf_produces_sorted_asc : forall n acc,
   Sorted_asc acc ->
-  (acc = [] \/ exists x xs, acc = xs ++ [x] /\ forall y, In y xs -> y < x) ->
+  (forall z, In z acc -> n < z) ->
   Sorted_asc (zeckendorf n acc).
 Proof.
-  intros n acc Hsorted Hacc_prop.
-  (* For empty accumulator, use the proven lemma *)
-  destruct Hacc_prop as [Heq | Hexists].
-  - (* acc = [] *)
-    subst acc. apply zeckendorf_produces_sorted_asc_empty.
-  - (* acc = xs ++ [x]: general case - admitted *)
-    (* This case requires additional invariants. See zeckendorf_fuel_sorted_strong
-       which needs (forall z, In z acc -> n < z) to proceed. *)
-    admit.
-Admitted.
+  intros n acc Hsorted Hinv.
+  unfold zeckendorf.
+  apply (zeckendorf_fuel_sorted_strong n n acc).
+  - exact Hsorted.
+  - exact Hinv.
+Qed.
 
 (*
   Corollary: zeckendorf_sorted produces descending sorted output
