@@ -22,7 +22,7 @@ Import ListNotations.
 
   The theorem has two parts:
 
-  1. EXISTENCE (lines 250-1010):
+  1. EXISTENCE:
      Every positive integer n has a Zeckendorf representation.
 
      Wiki proof strategy: Use strong induction on n. Pick the largest Fibonacci
@@ -36,10 +36,10 @@ Import ListNotations.
      - The sum equals n (zeckendorf_sum_property)
      - No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
 
-     Main theorem: zeckendorf_is_the_unique_repr (line 2559)
+     Main theorem: zeckendorf_is_the_unique_repr
      Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive)
 
-  2. UNIQUENESS (lines 1020-2430):
+  2. UNIQUENESS:
      No positive integer has two different Zeckendorf representations.
 
      Wiki proof strategy: Given two representations S and T with the same sum,
@@ -49,20 +49,10 @@ Import ListNotations.
 
      Key lemma: The sum of non-consecutive Fibonacci numbers with maximum F_j
      is strictly less than F_{j+1}. (Corresponds to wiki proof line 11)
-     Implementation: sum_nonconsec_fibs_bounded_sorted (line 1681)
+     Implementation: sum_nonconsec_fibs_bounded_sorted
 
-     Main theorem: zeckendorf_unique_sorted (line 2234)
+     Main theorem: zeckendorf_unique_sorted
      Status: Fully proven, no admits
-
-  PROOF STRUCTURE:
-  - Lines 12-248:   Fibonacci basics and helper lemmas
-  - Lines 250-267:  Greedy algorithm implementation
-  - Lines 270-505:  Algorithm correctness (sum and Fibonacci properties)
-  - Lines 507-1010: Existence proof (includes 1 admit)
-  - Lines 1020-1680: Fibonacci gap properties and list helpers
-  - Lines 1681-2233: Key lemma for uniqueness (fully proven)
-  - Lines 2234-2430: Uniqueness theorem (fully proven)
-  - Lines 2432-2571: Supporting lemmas and final theorem
 
   See "Rough Working/wiki proof.txt" for the informal proof this formalizes.
 *)
@@ -565,13 +555,6 @@ Proof.
 Qed.
 
 (*
-  Combined correctness lemma: Both properties together
-
-  This combines the previous two lemmas to show that zeckendorf produces
-  a list of Fibonacci numbers whose sum equals the input.
-*)
-
-(*
   ==============================================================================
   EXISTENCE PROOF - Part 1 of Zeckendorf's Theorem
   ==============================================================================
@@ -929,103 +912,6 @@ Admitted.
   ==============================================================================
   SORTED OUTPUT VERSION
   ==============================================================================
-*)
-
-(*
-  The greedy algorithm as written produces output in ASCENDING order:
-  - It selects the largest Fibonacci <= n
-  - But prepends to accumulator: x :: acc
-  - Since n decreases, elements added are: large, smaller, smaller...
-  - Prepending reverses order: smallest ... larger ... largest
-
-  For our sorted list proofs (which use DESCENDING order), we reverse:
-*)
-
-(* Predicate: list is sorted in ascending order (strictly increasing) *)
-(* Descending sorted version of zeckendorf (for use with Sorted_dec proofs) *)
-
-(* Helper: last element of ascending sorted list is largest *)
-
-(* Helper: In an ascending sorted list, head is less than all elements in tail *)
-
-(* Helper: Sorted_dec with appended singleton implies properties about head *)
-
-(* Helper: Reversal interchanges ascending and descending sorted *)
-
-(*
-  Key theorem: zeckendorf produces sorted output in ascending order
-
-  This theorem states that the greedy algorithm naturally produces an
-  ascending sorted list (smallest to largest Fibonacci numbers).
-
-  Combined with rev_sorted_asc_dec, this means zeckendorf_sorted produces
-  descending sorted output suitable for use with our Sorted_dec proofs.
-
-  TODO: This proof requires showing that the greedy algorithm maintains the
-  sorted property by always prepending elements smaller than those already in
-  the accumulator. The key insight is that as n decreases, the largest Fibonacci
-  number <= n also decreases, using the remainder_less_than_prev_fib lemma.
-*)
-(* Helper lemma: prepending a smaller element to an ascending sorted list preserves sorting *)
-
-(* Helper lemma: prepending to empty list gives sorted list *)
-
-(* Helper lemma: In ascending sorted list, all elements >= head *)
-
-(* Helper lemma: All elements of acc are greater than the largest Fib <= n when n < min(acc) *)
-
-(*
-  Lemma: If x = fib(k) is the largest Fibonacci number <= n, then n < 2*x
-
-  This is key for proving that the greedy algorithm maintains sorted order.
-  When we subtract x from n, the remainder is < x (which we just added to accumulator),
-  ensuring that future Fibonacci numbers added will be smaller.
-
-  Proof: Since x <= n < fib(k+1) and fib(k+1) = fib(k) + fib(k-1),
-  we have n < fib(k) + fib(k-1). By monotonicity, fib(k-1) < fib(k) = x,
-  so n < x + x = 2*x.
-*)
-
-(*
-  Helper lemma: In a non-empty fibs_upto list, the head of the reversed list
-  is the largest Fibonacci number <= n, and the next Fibonacci is > n.
-
-  This is a key property of the greedy algorithm's correctness.
-*)
-
-(* Stronger lemma with explicit invariant about acc and n *)
-
-(*
-  Simplified lemma: zeckendorf produces sorted output for empty accumulator
-
-  This is the proven case and the only one used in practice.
-*)
-
-(*
-  General lemma with arbitrary accumulator
-
-  This version has the correct invariant needed for the proof.
-*)
-
-(*
-  Corollary: zeckendorf_sorted produces descending sorted output
-
-  This follows from zeckendorf_produces_sorted_asc_empty and rev_sorted_asc_dec.
-*)
-
-(*
-  Helper lemma: fuel-based version of non-consecutive property
-
-  This lemma states that zeckendorf_fuel preserves the non-consecutive property:
-  if acc has no consecutive Fibs, then the result also has no consecutive Fibs.
-
-  The proof would proceed by induction on fuel, showing that when we add a new
-  Fibonacci number F_k, the remainder n - F_k < F_{k-1}, so the next Fibonacci
-  picked has index ≤ k-2, ensuring no consecutive Fibs are added.
-*)
-(*
-  Helper: Any Fibonacci number <= m has an index
-  (This is a trivial helper that's not actually needed, but kept for reference)
 *)
 
 Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
@@ -2536,10 +2422,6 @@ Proof.
 Qed.
 
 (*
-  Helper lemmas to simplify application of zeckendorf_unique_sorted
-*)
-
-(*
   Helper: sum_list distributes over append
 *)
 Lemma sum_list_app : forall l1 l2,
@@ -2628,29 +2510,6 @@ Proof.
         -- apply (sorted_tail x). exact Hsorted.
         -- simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
 Qed.
-
-(*
-  Lemma: zeckendorf_fuel only produces positive elements
-
-  This shows that all elements in the output of zeckendorf_fuel are positive,
-  provided all elements in acc are positive. Since we start with acc = [],
-  this means zeckendorf never produces 0.
-*)
-
-(*
-  Corollary: zeckendorf never produces 0
-*)
-
-(*
-  Lemma: Elements in zeckendorf output have Fibonacci indices >= 2
-
-  This strengthens zeckendorf_fib_property to show that not only are all
-  elements Fibonacci numbers, but they have indices >= 2, which excludes
-  fib(0) = 0 and fib(1) = 1.
-
-  This is important for Zeckendorf representations since we typically start
-  from fib(2) = 1 to avoid the ambiguity that fib(1) = fib(2) = 1.
-*)
 
 (*
   Corollary: Our algorithm produces THE unique Zeckendorf representation
