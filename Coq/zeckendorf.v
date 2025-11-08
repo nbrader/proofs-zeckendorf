@@ -1108,6 +1108,42 @@ Proof.
   lia.
 Qed.
 
+(*
+  Lemma: If x = fib(k) is the largest Fibonacci number <= n, then n < 2*x
+
+  This is key for proving that the greedy algorithm maintains sorted order.
+  When we subtract x from n, the remainder is < x (which we just added to accumulator),
+  ensuring that future Fibonacci numbers added will be smaller.
+
+  Proof: Since x <= n < fib(k+1) and fib(k+1) = fib(k) + fib(k-1),
+  we have n < fib(k) + fib(k-1). By monotonicity, fib(k-1) < fib(k) = x,
+  so n < x + x = 2*x.
+*)
+Lemma largest_fib_less_than_double : forall n k,
+  k >= 2 ->
+  fib k <= n ->
+  n < fib (S k) ->
+  n < 2 * fib k.
+Proof.
+  intros n k Hk_ge Hfib_le Hn_lt.
+  (* Use the recurrence relation: fib(k+1) = fib(k) + fib(k-1) *)
+  assert (Hrec: fib (S k) = fib k + fib (k - 1)).
+  { rewrite <- fib_recurrence by assumption. reflexivity. }
+  (* From n < fib(k+1), we get n < fib(k) + fib(k-1) *)
+  rewrite Hrec in Hn_lt.
+  (* Handle base case k=2 separately, then use monotonicity for k>2 *)
+  destruct (Nat.eq_dec k 2) as [Heq_k2 | Hneq_k2].
+  - (* k = 2: fib 2 = 1, fib 3 = 2, so n < 2, and we need n < 2*1 = 2 *)
+    subst k. simpl in *. lia.
+  - (* k > 2: use monotonicity fib(k-1) < fib(k) *)
+    assert (Hk_gt: k > 2) by lia.
+    assert (Hmono: fib (k - 1) < fib k).
+    { replace k with (S (k - 1)) at 2 by lia.
+      apply fib_mono. lia. }
+    (* Therefore n < fib(k) + fib(k-1) < fib(k) + fib(k) = 2 * fib(k) *)
+    lia.
+Qed.
+
 (* Stronger lemma with explicit invariant about acc and n *)
 Lemma zeckendorf_fuel_sorted_strong : forall fuel n acc,
   Sorted_asc acc ->
@@ -1150,25 +1186,31 @@ Proof.
               intros z Hz.
               simpl in Hz. destruct Hz as [Heq | Hin'].
               ** (* z = x: We need to show S n' - x < x, i.e., S n' < 2*x *)
+                 (* x is a Fibonacci number from fibs_upto, which contains fibs >= 1 *)
+                 rewrite Heq.
+                 assert (Hx_in': In x (rev (fibs_upto (S n')))).
+                 { rewrite <- Heqfibs_list. simpl. left. reflexivity. }
+                 (* x is a Fibonacci number fib(k) for some k >= 1 *)
+                 assert (Hx_fib: exists k, k >= 1 /\ fib k = x).
+                 { apply (in_fibs_upto_fib x (S n')). apply in_rev. exact Hx_in'. }
+                 destruct Hx_fib as [k [Hk_ge Hfib_eq]].
+                 (* We need to apply largest_fib_less_than_double *)
+                 (* For this we need: k >= 2, fib k <= S n', S n' < fib (S k) *)
                  (*
-                    REMAINING WORK: Prove that when x is the largest Fibonacci number
-                    <= S n', then S n' < 2*x.
+                    TODO: This requires proving that x is the *largest* Fib <= S n',
+                    i.e., that the next Fibonacci number is > S n'.
+                    This would need additional infrastructure about fibs_upto.
 
-                    Proof strategy:
-                    1. Let k be the index such that fib(k) = x and fib(k) <= S n' < fib(k+1)
-                    2. We know from Fibonacci properties that fib(k+1) = fib(k) + fib(k-1)
-                    3. Therefore S n' < fib(k) + fib(k-1) = x + fib(k-1)
-                    4. For k >= 2, we have fib(k-1) < fib(k) (Fibonacci is monotonic)
-                    5. Thus S n' < x + x = 2*x
+                    For now, we use the fact that x <= S n' and x > 0,
+                    which gives us S n' - x < S n'. Combined with x > 0,
+                    we can show the invariant holds for practical cases.
 
-                    Required lemmas to add:
-                    - Lemma fib_growth: forall k, k >= 2 -> fib(k-1) < fib(k)
-                    - Lemma largest_fib_bound: forall n x k,
-                        fib(k) = x -> x <= n -> n < fib(k+1) -> k >= 2 ->
-                        n < 2 * x
-
-                    See lines 813-826 for remainder_less_than_prev_fib which uses
-                    similar reasoning.
+                    A complete proof would need:
+                    Lemma head_of_rev_fibs_upto_is_largest : forall n x,
+                      In x (rev (fibs_upto n)) ->
+                      x = hd 0 (rev (fibs_upto n)) ->
+                      (forall y, In y (fibs_upto n) -> y <= x) /\
+                      (exists k, fib k = x /\ fib (S k) > n).
                  *)
                  admit.
               ** (* z in acc: use original invariant *)
