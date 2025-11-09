@@ -946,6 +946,63 @@ Admitted.
   Growth lemma: For n >= 5, fib n >= n.
 *)
 
+(* Helper lemma: In and takeWhile relationship *)
+Lemma takeWhile_In : forall {A} (f : A -> bool) x l,
+  In x (takeWhile f l) -> In x l /\ f x = true.
+Proof.
+  intros A f x l.
+  induction l as [|y ys IH].
+  - simpl. tauto.
+  - simpl. destruct (f y) eqn:Efy.
+    + simpl. intros [H|H].
+      * subst. split. left. reflexivity. assumption.
+      * apply IH in H as [H1 H2]. split. right. assumption. assumption.
+    + simpl. tauto.
+Qed.
+
+(* Helper lemma: seq produces a strictly increasing sequence *)
+Lemma seq_ordered : forall start len x y,
+  In x (seq start len) ->
+  In y (seq start len) ->
+  x < y ->
+  exists prefix suffix, seq start len = prefix ++ x :: suffix /\ In y suffix.
+Proof.
+  intros start len.
+  generalize dependent start.
+  induction len as [|len' IH]; intros start x y Hx Hy Hlt.
+  - simpl in Hx. contradiction.
+  - simpl in Hx, Hy.
+    destruct Hx as [Hx_eq|Hx_in], Hy as [Hy_eq|Hy_in].
+    + (* x = start, y = start: contradiction with x < y *)
+      subst. lia.
+    + (* x = start, y in tail *)
+      subst x. exists [], (seq (S start) len'). split; [reflexivity | assumption].
+    + (* x in tail, y = start: contradiction with x < y *)
+      subst. apply seq_ge in Hx_in. lia.
+    + (* both in tail *)
+      apply IH with (start := S start) in Hlt as [prefix [suffix [Heq Hy_in_suffix]]]; try assumption.
+      exists (start :: prefix), suffix. split.
+      * simpl. rewrite Heq. reflexivity.
+      * assumption.
+Qed.
+
+(* Helper lemma: if x is in l, f x = true, and all elements before x in l satisfy f, then x is in takeWhile f l *)
+Lemma In_takeWhile_prefix : forall {A} (f : A -> bool) x l prefix suffix,
+  l = prefix ++ x :: suffix ->
+  (forall y, In y prefix -> f y = true) ->
+  f x = true ->
+  In x (takeWhile f l).
+Proof.
+  intros A f x l prefix suffix Heq Hprefix Hfx.
+  subst l.
+  induction prefix as [|p ps IH].
+  - simpl. rewrite Hfx. left. reflexivity.
+  - simpl. assert (Hfp: f p = true).
+    { apply Hprefix. left. reflexivity. }
+    rewrite Hfp. simpl. right.
+    apply IH. intros y Hy. apply Hprefix. right. assumption.
+Qed.
+
 (* Helper lemma: if fib k <= n and k >= 1, then fib k is in fibs_upto n *)
 Lemma fib_in_fibs_upto : forall k n,
   k >= 1 ->
@@ -954,11 +1011,67 @@ Lemma fib_in_fibs_upto : forall k n,
 Proof.
   intros k n Hk_ge Hfib_le.
   unfold fibs_upto.
-  (* fibs_upto n = takeWhile (fun x => Nat.leb x n) (map fib (seq 1 (S n))) *)
-  (* We need to show fib k is in this list *)
-  (* Since seq 1 (S n) = [1; 2; ...; S n], if k <= S n, then k is in seq 1 (S n) *)
-  (* And since fib k <= n, the takeWhile will include fib k *)
-  admit.
+  (* Strategy: show k is in seq 1 (S n), then use properties of takeWhile *)
+
+  (* First, establish that k <= S n *)
+  assert (Hk_bound: k <= S n).
+  { destruct (le_lt_dec k 4) as [Hk_small|Hk_large].
+    - (* k <= 4, so k <= S n for any n >= 3 *)
+      destruct n as [|[|[|n']]].
+      + (* n = 0: fib k <= 0 implies fib k = 0, but k >= 1 means fib k >= 1, contradiction *)
+        assert (Hfib_pos: fib k >= 1).
+        { apply fib_pos. assumption. }
+        lia.
+      + (* n = 1: fib k <= 1 and k >= 1 means k in {1, 2}, so k <= 2 = S 1 *)
+        admit.
+      + (* n = 2: fib k <= 2 and k >= 1, checking cases *)
+        admit.
+      + (* n >= 3: k <= 4 < S (S (S (S n'))) *)
+        lia.
+    - (* k > 4, so k >= 5 *)
+      admit.
+  }
+
+  (* Now k is in seq 1 (S n) *)
+  assert (Hk_in_seq: In k (seq 1 (S n))).
+  { apply in_seq. lia. }
+
+  (* fib k is in map fib (seq 1 (S n)) *)
+  assert (Hfib_in_map: In (fib k) (map fib (seq 1 (S n)))).
+  { apply in_map. assumption. }
+
+  (* Now we need to show fib k passes the takeWhile filter *)
+  (* We'll do this by showing all Fibonacci numbers <= fib k in the sequence pass the filter *)
+
+  (* Use induction on the sequence structure, specialized approach *)
+  clear Hfib_in_map Hk_in_seq.
+  remember (seq 1 (S n)) as indices.
+  assert (H_k_in: In k indices).
+  { subst indices. apply in_seq. lia. }
+  clear Heqindices Hk_bound.
+
+  (* We need a different approach: prove directly by induction on indices *)
+  generalize dependent k.
+  induction indices as [|i is IH]; intros k Hk_ge Hfib_le H_k_in.
+  - (* Empty list: contradiction *)
+    inversion H_k_in.
+  - (* i :: is *)
+    simpl. simpl in H_k_in.
+    destruct (Nat.leb (fib i) n) eqn:Efib_i.
+    + (* fib i <= n, so it's included *)
+      simpl. destruct H_k_in as [H_eq|H_in].
+      * (* k = i *)
+        left. rewrite H_eq. reflexivity.
+      * (* k is in is *)
+        right. apply IH; assumption.
+    + (* fib i > n *)
+      (* This means all remaining elements will also be filtered out *)
+      (* But this contradicts our hypothesis if k = i *)
+      destruct H_k_in as [H_eq|H_in].
+      * (* k = i, but fib i > n contradicts fib k <= n *)
+        admit.
+      * (* k is in is, but takeWhile stops here *)
+        admit.
 Admitted.
 
 (* Helper lemma: elements in zeckendorf_fuel result (with empty acc) are bounded by the input n *)
@@ -1602,6 +1715,43 @@ Qed.
      - This contradicts sum(S') = sum(T')
   5. Therefore S' = T' = empty, so S = T
 *)
+
+(* Lemma: zeckendorf_fuel produces sorted (descending) output with empty accumulator *)
+Lemma zeckendorf_fuel_sorted_empty : forall fuel n,
+  Sorted_dec (zeckendorf_fuel fuel n []).
+Proof.
+  induction fuel as [|fuel' IH]; intro n.
+  - (* Base case: fuel = 0 *)
+    simpl. constructor.
+  - (* Inductive case: fuel = S fuel' *)
+    simpl. destruct n as [|n'].
+    + (* n = 0 *)
+      constructor.
+    + (* n = S n' *)
+      remember (rev (fibs_upto (S n'))) as fibs.
+      destruct fibs as [|x xs].
+      * (* fibs = [], return [] *)
+        constructor.
+      * (* fibs = x :: xs *)
+        destruct (Nat.leb x (S n')) eqn:Eleb.
+        -- (* x <= S n', so we prepend x *)
+           (* We need to show: Sorted_dec (x :: zeckendorf_fuel fuel' (S n' - x) []) *)
+           (* This requires showing x is greater than all elements in the recursive result *)
+           (* For now, admit this as it requires proving properties about the relationship
+              between x and elements in zeckendorf_fuel fuel' (S n' - x) [] *)
+           admit.
+        -- (* x > S n', return [] *)
+           constructor.
+Admitted.
+
+(* Theorem: zeckendorf produces sorted output *)
+Theorem zeckendorf_sorted : forall n,
+  Sorted_dec (zeckendorf n []).
+Proof.
+  intro n.
+  unfold zeckendorf.
+  apply zeckendorf_fuel_sorted_empty.
+Qed.
 
 Definition zeckendorf_repr_exists := fun n => is_zeckendorf_repr n (zeckendorf n []).
 
