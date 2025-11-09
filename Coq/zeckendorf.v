@@ -910,9 +910,69 @@ Lemma largest_fib_in_fibs_upto : forall x i n xs,
   n < fib (S i).
 Proof.
   intros x i n xs Hi Hx Hrev Hxn.
-  (* The proof follows from the properties of takeWhile on monotonic sequences.
-     Since fibs_upto n stops including elements when they exceed n, and fib i
-     is the last element included, fib (S i) must exceed n. *)
+  (* Strategy: Show that since fib i is the last element in fibs_upto n,
+     the next Fibonacci fib (i+1) must exceed n. *)
+
+  (* First, establish that fib i <= n *)
+  assert (Hx_le_n: x <= n).
+  { (* x is in fibs_upto n, so it passes the predicate *)
+    assert (Hin: In x (fibs_upto n)).
+    { apply in_rev. rewrite Hrev. left. reflexivity. }
+    apply in_fibs_upto_le. assumption. }
+
+  (* Case split: is fib (i+1) in the source sequence? *)
+  destruct (Nat.le_gt_cases (S i) (S n)) as [HSi_in_src | HSi_not_in_src].
+
+  - (* Case 1: S i <= S n, so fib (S i) is in source sequence *)
+    (* Since fib i is the last element taken and fib (S i) is in the source,
+       fib (S i) must fail the predicate, i.e., fib (S i) > n *)
+
+    (* We'll show this by contradiction: assume fib (S i) <= n *)
+    destruct (Nat.le_gt_cases (fib (S i)) n) as [Hcontra | Hgoal].
+    + (* Assume fib (S i) <= n - we'll derive a contradiction *)
+      exfalso.
+
+      (* Since fib (S i) <= n and S i <= S n, fib (S i) should be in fibs_upto n *)
+      (* But x = fib i is the LAST element, so fib (S i) cannot be in the result *)
+
+      (* Key: we need to show that if fib i is in fibs_upto n and fib (S i) <= n,
+         and the source contains both, then fib (S i) must also be in fibs_upto n.
+         This contradicts x being the last element. *)
+
+      admit.  (* This requires a lemma about takeWhile on monotonic sequences *)
+
+    + (* fib (S i) > n, which gives us the goal *)
+      assumption.
+
+  - (* Case 2: S i > S n, so fib (S i) is not in source sequence *)
+    (* First, we establish that i <= S n *)
+    (* Because fib i is in fibs_upto n, it must come from the source map fib (seq 1 (S n)) *)
+    assert (Hi_le_Sn: i <= S n).
+    { (* x is in fibs_upto n *)
+      assert (Hin: In x (fibs_upto n)).
+      { apply in_rev. rewrite Hrev. left. reflexivity. }
+      (* fibs_upto n uses source seq 1 (S n), so indices are in [1..S n] *)
+      unfold fibs_upto in Hin.
+      (* We need a lemma showing elements from takeWhile (map fib (seq 1 (S n)))
+         are of the form fib k for k in seq 1 (S n), i.e., 1 <= k <= S n *)
+      admit.  (* Needs helper lemma about source sequence bounds *)
+    }
+
+    (* So we have i <= S n and S i > S n, which means i = S n *)
+    assert (Hi_eq: i = S n) by lia.
+
+    (* Now we need to show n < fib (S i) *)
+    (* We have fib i = x and x < n, and i = S n *)
+    (* So fib (S n) < n *)
+    assert (H_fib_Sn_lt_n: fib (S n) < n).
+    { assert (Heq: fib (S n) = fib i) by (rewrite Hi_eq; reflexivity).
+      rewrite Heq. rewrite Hx. assumption. }
+
+    (* We need to show n < fib (S i) = fib (S (S n)) *)
+    (* Using Fibonacci recurrence: fib (S (S n)) = fib (S n) + fib n *)
+    (* Since fib (S n) < n and fib n > 0 (for n >= 1), we have...  *)
+
+    admit.  (* Need growth property: if fib (S n) < n, then n < fib (S (S n)) *)
 Admitted.
 
 (*
