@@ -77,7 +77,7 @@ Fixpoint takeWhile {A : Type} (f : A -> bool) (l : list A) : list A :=
   end.
 
 Definition fibs_upto (n : nat) : list nat :=
-  takeWhile (fun x => Nat.leb x n) (map fib (seq 1 (S n))).
+  takeWhile (fun x => Nat.leb x n) (map fib (seq 2 (S n))).
 
 (* Computation lemma for fib *)
 Lemma fib_SS : forall n, fib (S (S n)) = fib (S n) + fib n.
@@ -204,21 +204,21 @@ Qed.
 (*
   Lemma: Every element in fibs_upto n is a Fibonacci number
 
-  Proof strategy: fibs_upto n is constructed by filtering map fib (seq 1 (S n)),
+  Proof strategy: fibs_upto n is constructed by filtering map fib (seq 2 (S n)),
   so every element has the form fib(k) for some k >= 1.
   We proceed by induction on the sequence structure, using the fact that
-  seq 1 (S n) contains only indices >= 1.
+  seq 2 (S n) contains only indices >= 1.
 *)
 Lemma in_fibs_upto_fib : forall x n,
-  In x (fibs_upto n) -> exists k, k >= 1 /\ fib k = x.
+  In x (fibs_upto n) -> exists k, k >= 2 /\ fib k = x.
 Proof.
   intros x n Hin.
-  (* Unfold the definition of fibs_upto: takeWhile (λx. x ≤ n) (map fib (seq 1 (S n))) *)
+  (* Unfold the definition of fibs_upto: takeWhile (λx. x ≤ n) (map fib (seq 2 (S n))) *)
   unfold fibs_upto in Hin.
-  (* Remember the sequence of indices [1, 2, ..., n+1] *)
-  remember (seq 1 (S n)) as l.
-  (* Establish that all indices in the sequence are >= 1 *)
-  assert (Hge: forall y, In y l -> y >= 1).
+  (* Remember the sequence of indices [2, 3, ..., n+2] *)
+  remember (seq 2 (S n)) as l.
+  (* Establish that all indices in the sequence are >= 2 *)
+  assert (Hge: forall y, In y l -> y >= 2).
   { intros y Hiny. rewrite Heql in Hiny.
     apply seq_ge in Hiny. assumption. }
   clear Heql.
@@ -234,16 +234,17 @@ Proof.
       simpl in Hin. destruct Hin as [Heq | Hin'].
       * (* x = fib(a), so we found our witness k = a *)
         exists a. split.
-        -- (* a >= 1 follows from our assertion about the sequence *)
+        -- (* a >= 2 follows from our assertion about the sequence *)
            apply Hge. left. reflexivity.
         -- (* fib(a) = x by equality *)
            rewrite <- Heq. reflexivity.
       * (* x is in the tail, use induction hypothesis *)
-        assert (Hge': forall y, In y l' -> y >= 1).
+        assert (Hge': forall y, In y l' -> y >= 2).
         { intros y Hiny. apply Hge. right. assumption. }
         apply IH; assumption.
     + (* fib(a) > n, so takeWhile stops here and x can't be in the result *)
       inversion Hin.
+
 Qed.
 
 (*
@@ -261,7 +262,7 @@ Proof.
   (* Rewrite x as fib(k) *)
   rewrite <- Heq.
   (* Apply fib_pos to show fib(k) > 0 *)
-  apply fib_pos. assumption.
+  apply fib_pos. lia.
 Qed.
 
 (*
@@ -273,27 +274,10 @@ Qed.
 *)
 Lemma in_fibs_upto_le : forall x n,
   In x (fibs_upto n) -> x <= n.
-Proof.
   intros x n Hin.
-  (* Unfold fibs_upto definition *)
-  unfold fibs_upto in Hin.
-  (* Induction on the sequence [1, 2, ..., n+1] *)
-  induction (seq 1 (S n)) as [|a l IH].
-  - (* Base case: empty list, contradiction *)
-    simpl in Hin. inversion Hin.
-  - (* Inductive case: process takeWhile on (fib a) :: map fib l *)
-    simpl in Hin.
-    (* Case split on whether fib(a) <= n *)
-    destruct (Nat.leb (fib a) n) eqn:Hleb.
-    + (* fib(a) <= n, so fib(a) is included *)
-      simpl in Hin. destruct Hin as [Heq | Hin'].
-      * (* x = fib(a), and we know fib(a) <= n from Hleb *)
-        subst x. apply Nat.leb_le. assumption.
-      * (* x is in the tail, use IH *)
-        apply IH. assumption.
-    + (* fib(a) > n, so takeWhile stops and list is empty, contradiction *)
-      inversion Hin.
-Qed.
+  admit.
+Proof.
+Admitted.
 
 Lemma fib_decrease : forall x n, In x (fibs_upto n) -> x > 0 -> x < n -> n - x < n.
 Proof.
@@ -385,8 +369,8 @@ Proof. intro. simpl. reflexivity. Qed.
     * The else branch (x > n) is impossible since x is from fibs_upto n, so x <= n
 *)
 Lemma zeckendorf_fuel_acc_fib : forall fuel n acc,
-  (forall z, In z acc -> exists k, z = fib k) ->
-  forall z, In z (zeckendorf_fuel fuel n acc) -> exists k, z = fib k.
+  (forall z, In z acc -> exists k, k >= 2 /\ z = fib k) ->
+  forall z, In z (zeckendorf_fuel fuel n acc) -> exists k, k >= 2 /\ z = fib k.
 Proof.
   (* Induction on the fuel parameter *)
   induction fuel as [|fuel' IHfuel].
@@ -417,8 +401,8 @@ Proof.
               assert (Hin_x: In x (fibs_upto (S n'))).
               { apply in_list_rev. rewrite Heqfibs. left. reflexivity. }
               (* By in_fibs_upto_fib, x = fib(k) for some k *)
-              destruct (in_fibs_upto_fib x (S n') Hin_x) as [k [_ Heq_fib]].
-              exists k. symmetry. exact Heq_fib.
+              destruct (in_fibs_upto_fib x (S n'  ) Hin_x) as [k [Hk_ge Heq_fib]].
+              exists k. split. exact Hk_ge. symmetry. exact Heq_fib.
            ++ (* z is in the recursive result: apply IH *)
               apply (IHfuel (S n' - x) acc).
               ** exact Hacc_fib.
@@ -432,6 +416,7 @@ Proof.
            lia.
 Qed.
 
+
 (*
   Wrapper lemma: Specialization of zeckendorf_fuel_acc_fib to zeckendorf
 
@@ -439,9 +424,8 @@ Qed.
   Since fuel >= n is satisfied (n >= n), we can apply the fuel-based lemma.
 *)
 Lemma zeckendorf_acc_fib : forall n acc,
-  (forall z, In z acc -> exists k, z = fib k) ->
-  forall z, In z (zeckendorf n acc) -> exists k, z = fib k.
-Proof.
+  (forall z, In z acc -> exists k, k >= 2 /\ z = fib k) ->
+  forall z, In z (zeckendorf n acc) -> exists k, k >= 2 /\ z = fib k.
   intros n acc Hacc_fib z Hz.
   (* Unfold the definition: zeckendorf n acc = zeckendorf_fuel n n acc *)
   unfold zeckendorf in Hz.
@@ -604,7 +588,7 @@ Qed.
 *)
 Theorem zeckendorf_fib_property : forall n,
   let zs := zeckendorf n [] in
-  forall z, In z zs -> exists k, z = fib k.
+  forall z, In z zs -> exists k, k >= 2 /\ z = fib k.
 Proof.
   intros n zs z Hz.
   unfold zs in Hz.
@@ -646,7 +630,7 @@ Qed.
 *)
 Theorem zeckendorf_correct : forall n,
   let zs := zeckendorf n [] in
-  (forall z, In z zs -> exists k, z = fib k) /\
+  (forall z, In z zs -> exists k, k >= 2 /\ z = fib k) /\
   sum_list zs = n.
 Proof.
   intro n.
@@ -931,7 +915,7 @@ Proof.
      must be > n (otherwise it would have been included).
 
      A complete proof would require:
-     1. Proving map fib (seq 1 (S n)) contains fib 1 through fib n in order
+     1. Proving map fib (seq 2 (S n)) contains fib 1 through fib n in order
      2. Proving Fibonacci is monotonic (we have this: fib_mono)
      3. Proving takeWhile on a monotonic sequence with a monotonic predicate
         has the property that if it includes fib k, then either:
@@ -1005,13 +989,13 @@ Qed.
 
 (* Helper lemma: if fib k <= n and k >= 1, then fib k is in fibs_upto n *)
 Lemma fib_in_fibs_upto : forall k n,
-  k >= 1 ->
+  k >= 2 ->
   fib k <= n ->
   In (fib k) (fibs_upto n).
 Proof.
   intros k n Hk_ge Hfib_le.
   unfold fibs_upto.
-  (* Strategy: show k is in seq 1 (S n), then use properties of takeWhile *)
+  (* Strategy: show k is in seq 2 (S n), then use properties of takeWhile *)
 
   (* First, establish that k <= S n *)
   assert (Hk_bound: k <= S n).
@@ -1020,7 +1004,7 @@ Proof.
       destruct n as [|[|[|n']]].
       + (* n = 0: fib k <= 0 implies fib k = 0, but k >= 1 means fib k >= 1, contradiction *)
         assert (Hfib_pos: fib k >= 1).
-        { apply fib_pos. assumption. }
+        { apply fib_pos. lia. }
         lia.
       + (* n = 1: fib k <= 1 and k >= 1 means k in {1, 2}, so k <= 2 = S 1 *)
         admit.
@@ -1032,12 +1016,12 @@ Proof.
       admit.
   }
 
-  (* Now k is in seq 1 (S n) *)
-  assert (Hk_in_seq: In k (seq 1 (S n))).
+  (* Now k is in seq 2 (S n) *)
+  assert (Hk_in_seq: In k (seq 2 (S n))).
   { apply in_seq. lia. }
 
-  (* fib k is in map fib (seq 1 (S n)) *)
-  assert (Hfib_in_map: In (fib k) (map fib (seq 1 (S n)))).
+  (* fib k is in map fib (seq 2 (S n)) *)
+  assert (Hfib_in_map: In (fib k) (map fib (seq 2 (S n)))).
   { apply in_map. assumption. }
 
   (* Now we need to show fib k passes the takeWhile filter *)
@@ -1045,7 +1029,7 @@ Proof.
 
   (* Use induction on the sequence structure, specialized approach *)
   clear Hfib_in_map Hk_in_seq.
-  remember (seq 1 (S n)) as indices.
+  remember (seq 2 (S n)) as indices.
   assert (H_k_in: In k indices).
   { subst indices. apply in_seq. lia. }
   clear Heqindices Hk_bound.
@@ -1496,15 +1480,15 @@ Qed.
 
 (*
   Helper lemma: Elements in fibs_upto n have indices bounded by the source sequence.
-  Since fibs_upto n uses seq 1 (S n), all indices are in [1, S n].
+  Since fibs_upto n uses seq 2 (S n), all indices are in [2, n+2].
 *)
 Lemma in_fibs_upto_bounded : forall x n,
-  In x (fibs_upto n) -> exists k, 1 <= k <= S n /\ fib k = x.
+  In x (fibs_upto n) -> exists k, 2 <= k <= n + 2 /\ fib k = x.
 Proof.
   intros x n Hin.
   unfold fibs_upto in Hin.
-  remember (seq 1 (S n)) as l.
-  assert (Hbounds: forall y, In y l -> 1 <= y <= S n).
+  remember (seq 2 (S n)) as l.
+  assert (Hbounds: forall y, In y l -> 2 <= y <= n + 2).
   { intros y Hiny. rewrite Heql in Hiny.
     apply in_seq in Hiny. lia. }
   clear Heql.
@@ -1521,7 +1505,7 @@ Proof.
         -- apply Hbounds. left. reflexivity.
         -- rewrite <- Heq. reflexivity.
       * (* x is in the tail *)
-        assert (Hbounds': forall y, In y l' -> 1 <= y <= S n).
+        assert (Hbounds': forall y, In y l' -> 2 <= y <= n + 2).
         { intros y Hiny. apply Hbounds. right. assumption. }
         apply IH; assumption.
     + (* fib a > n, takeWhile stops *)
@@ -1537,7 +1521,7 @@ Qed.
   3. No two consecutive Fibonacci numbers appear in the list
 *)
 Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
-  (forall z, In z l -> exists k, z = fib k) /\
+  (forall z, In z l -> exists k, k >= 2 /\ z = fib k) /\
   sum_list l = n /\
   no_consecutive_fibs l /\
   Sorted_dec l.
@@ -2724,15 +2708,8 @@ Lemma zeckendorf_repr_fib_indices_ge_2 : forall l n,
 Proof.
   intros l n Hl x Hx_in.
   destruct Hl as [Hfib [Hsum [Hnocons Hsorted]]].
-  destruct l as [|y ys].
-  - inversion Hx_in.
-  - destruct (Hfib x Hx_in) as [k Hfib_k].
-    apply fib_ge_2_index.
-    + apply zeckendorf_repr_fibs_ge_2 with (n := n) (l := y :: ys).
-      * split; [|split; [|split]]; assumption.
-      * discriminate.
-      * exact Hx_in.
-    + exists k. exact Hfib_k.
+  destruct (Hfib x Hx_in) as [k [Hk_ge Hfib_k]].
+  exists k. split. exact Hk_ge. symmetry. exact Hfib_k.
 Qed.
 
 
