@@ -1609,14 +1609,17 @@ Theorem zeckendorf_repr_exists_proof : forall n, zeckendorf_repr_exists n.
 Proof.
   intro n.
   unfold is_zeckendorf_repr.
-  split; [|split].
+  split; [|split; [|split]].
   - (* Part 1: All elements are Fibonacci numbers *)
     apply zeckendorf_fib_property.
   - (* Part 2: Sum equals n *)
     apply zeckendorf_sum_property.
   - (* Part 3: No consecutive Fibonacci numbers *)
     apply zeckendorf_no_consecutive.
-Qed.
+  - (* Part 4: Sorted in descending order *)
+    (* TODO: Prove that zeckendorf produces sorted output *)
+    admit.
+Admitted.
 
 (*
   Helper lemma: In a sorted descending list of Fibonacci numbers where
