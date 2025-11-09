@@ -904,6 +904,28 @@ Qed.
 *)
 
 (*
+  Growth lemma: For n >= 5, fib n >= n.
+*)
+Lemma fib_linear_growth : forall n,
+  n >= 5 ->
+  fib n >= n.
+Proof.
+  intros n Hn.
+  (* Use strong induction from n = 5 upward *)
+  remember (n - 5) as k eqn:Hk.
+  assert (Heq: n = 5 + k) by lia.
+  clear Hk. subst n.
+  induction k as [|k' IH].
+  - (* Base case: n = 5, fib 5 = 5 *)
+    simpl. lia.
+  - (* Inductive case: n = 6 + k' *)
+    (* IH says: fib (5 + k') >= 5 + k' *)
+    (* Goal: fib (6 + k') >= 6 + k' *)
+    (* fib (6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+    admit.
+Admitted.
+
+(*
   Helper lemma: For small n where fib (S n) < n, we have n < fib (S (S n)).
   This property holds trivially since fib (S n) < n is impossible for n >= 2.
 *)
@@ -924,11 +946,22 @@ Proof.
   - (* n = 1: fib 2 = 1, not < 1 *)
     simpl in Hlt. lia.
   - (* n >= 2: fib (S (S n')) >= S (S n') *)
-    (* This contradicts the hypothesis *)
-    exfalso.
-    (* We need a lemma: fib (S (S n')) >= S (S n') for all n' *)
-    admit.  (* Needs fibonacci growth lemma *)
-Admitted.
+    (* This contradicts the hypothesis because fib grows *)
+    (* For n = S (S n'), fib (S n) = fib (S (S (S n'))) *)
+    (* We need to show fib (S (S (S n'))) >= S (S (S n')), i.e., fib (3 + n') >= 3 + n' *)
+    destruct n' as [|[|[|n'']]].
+    + (* n' = 0, n = 2: fib 3 = 2, not < 2 *)
+      simpl in Hlt. lia.
+    + (* n' = 1, n = 3: fib 4 = 3, not < 3 *)
+      simpl in Hlt. lia.
+    + (* n' = 2, n = 4: fib 5 = 5, not < 4 *)
+      simpl in Hlt. lia.
+    + (* n' >= 3, so n >= 5: use fib_linear_growth *)
+      exfalso.
+      assert (Hgrowth: fib (S (S (S (S (S n''))))) >= S (S (S (S (S n''))))).
+      { apply fib_linear_growth. lia. }
+      lia.
+Qed.
 
 Lemma largest_fib_in_fibs_upto : forall x i n xs,
   i >= 2 ->
