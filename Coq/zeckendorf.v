@@ -617,31 +617,6 @@ Proof.
 Qed.
 
 (*
-  Main Theorem: Full Zeckendorf correctness
-
-  The Zeckendorf decomposition of n produces a list of Fibonacci numbers
-  whose sum equals n.
-
-  This is the culmination of all our work: we've formally verified that
-  the greedy algorithm correctly computes Zeckendorf representations.
-
-  Note: This theorem doesn't yet prove uniqueness or the non-consecutive
-  property, but it establishes the fundamental correctness of the decomposition.
-*)
-Theorem zeckendorf_correct : forall n,
-  let zs := zeckendorf n [] in
-  (forall z, In z zs -> exists k, k >= 2 /\ z = fib k) /\
-  sum_list zs = n.
-Proof.
-  intro n.
-  split.
-  - (* Part 1: All elements are Fibonacci numbers *)
-    apply zeckendorf_fib_property.
-  - (* Part 2: Sum equals n *)
-    apply zeckendorf_sum_property.
-Qed.
-
-(*
   ==============================================================================
   ADDITIONAL PROPERTIES (ADMITTED - TO BE PROVEN)
   ==============================================================================
@@ -2692,15 +2667,6 @@ Proof.
   - exists (S (S k')). split; [lia | reflexivity].
 Qed.
 
-(* Helper lemma: In sorted non-empty lists with no consecutive Fibs, all elements are >= 2 *)
-Lemma zeckendorf_repr_fibs_ge_2 : forall l n,
-  is_zeckendorf_repr n l ->
-  l <> [] ->
-  forall z, In z l -> z >= 2.
-Proof.
-  admit.
-Admitted.
-
 (* Main helper: convert Fib property to >= 2 form for Zeckendorf representations *)
 Lemma zeckendorf_repr_fib_indices_ge_2 : forall l n,
   is_zeckendorf_repr n l ->
@@ -2750,4 +2716,3 @@ Proof.
   -apply zeckendorf_repr_exists_proof.
   -apply zeckendorf_repr_unique_proof.
 Qed.
-Print Assumptions zeckendorfs_theorem_proof.
