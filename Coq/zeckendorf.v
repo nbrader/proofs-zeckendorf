@@ -921,9 +921,76 @@ Proof.
   - (* Inductive case: n = 6 + k' *)
     (* IH says: fib (5 + k') >= 5 + k' *)
     (* Goal: fib (6 + k') >= 6 + k' *)
-    (* fib (6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
-    admit.
-Admitted.
+
+    (* Apply the induction hypothesis *)
+    assert (HIH: fib (S (S (S (S (S k'))))) >= S (S (S (S (S k'))))).
+    { apply IH. lia. }
+
+    (* We need to show: fib(S(S(S(S(S(S k')))))) >= S(S(S(S(S(S k'))))) *)
+    (* Use the fact that fib(n+2) = fib(n+1) + fib(n) >= fib(n+1) >= ... *)
+
+    (* For clarity, let's just compute using the recurrence *)
+    (* fib(6+k') >= fib(5+k') + fib(4+k') by Fibonacci property *)
+    (* We have fib(5+k') >= 5+k' by IH *)
+    (* And fib(4+k') >= 1 (since it's a positive Fibonacci number) *)
+
+    assert (Hpos: fib (S (S (S (S k')))) >= 1).
+    { destruct k'.
+      - simpl. lia.
+      - apply fib_pos. lia. }
+
+    (* Key insight: We can show fib(S(S n)) >= fib(S n) + 1 for large n *)
+    (* Actually, just use: fib(6+k') >= fib(5+k') >= 5+k', and since fib is increasing... *)
+
+    (* Simpler: show fib(6+k') >= 6+k' directly using that fib grows *)
+    (* We know fib(5+k') >= 5+k' *)
+    (* And fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* We need to combine the facts to show the goal *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* We have: fib(5+k') >= 5+k', fib(4+k') >= 1 *)
+    (* And: fib(6+k') = fib(5+k') + fib(4+k') by Fibonacci recurrence *)
+
+    (* The recurrence fib(S(S n)) = fib(S n) + fib n is proven in fib_SS *)
+    (* For n = S(S(S(S k'))), this gives fib(6+k') = fib(5+k') + fib(4+k') *)
+
+    (* Since lia has trouble with fib, let's use explicit bounds *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* From fib_SS: fib(6+k') = fib(5+k') + fib(4+k') *)
+    (* From HIH: fib(5+k') >= 5+k' *)
+    (* From Hpos: fib(4+k') >= 1 *)
+    (* Therefore: fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* Apply fib_SS to get the equality *)
+    assert (Hfib_eq: fib (S (S (S (S (S (S k')))))) =
+                     fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
+    { apply fib_SS. }
+
+    (* Rewrite the goal using this equality *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* We have Hfib_eq: fib(6+k') = fib(5+k') + fib(4+k') *)
+    (*         HIH: fib(5+k') >= 5+k' *)
+    (*         Hpos: fib(4+k') >= 1 *)
+
+    (* Combine these facts *)
+    (* From Hfib_eq, HIH, and Hpos, we can conclude the goal *)
+    (* fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* Let me try explicit reasoning since lia might not handle fib well *)
+    assert (Hgoal: S (S (S (S (S (S k'))))) <=
+                   fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
+    { (* fib(5+k') + fib(4+k') >= (5+k') + 1 *)
+      assert (H1: S (S (S (S (S k')))) <= fib (S (S (S (S (S k')))))).
+      { exact HIH. }
+      assert (H2: 1 <= fib (S (S (S (S k'))))).
+      { exact Hpos. }
+      (* Now (5+k') + 1 <= fib(5+k') + fib(4+k') *)
+      lia. }
+
+    (* Combine with Hfib_eq *)
+    rewrite <- Hfib_eq in Hgoal.
+    exact Hgoal.
+Qed.
 
 (*
   Helper lemma: For small n where fib (S n) < n, we have n < fib (S (S n)).
@@ -957,10 +1024,79 @@ Proof.
     + (* n' = 2, n = 4: fib 5 = 5, not < 4 *)
       simpl in Hlt. lia.
     + (* n' >= 3, so n >= 5: use fib_linear_growth *)
+      (* n = S (S (S (S (S n'')))), so S n = S (S (S (S (S (S n''))))) *)
+      (* S n >= 6, so we can apply fib_linear_growth *)
       exfalso.
-      assert (Hgrowth: fib (S (S (S (S (S n''))))) >= S (S (S (S (S n''))))).
+      assert (Hgrowth: fib (S (S (S (S (S (S n'')))))) >= S (S (S (S (S (S n'')))))).
       { apply fib_linear_growth. lia. }
       lia.
+Qed.
+
+(*
+  Helper lemma: If a list has a last element that satisfies a predicate,
+  and we take a sublist with takeWhile, then any element after the last
+  taken element must fail the predicate.
+
+  More specifically: if takeWhile produces a result with last element y,
+  and there's an element z in the source after y, then z must fail the predicate.
+*)
+Lemma takeWhile_last_successor_fails : forall {A} (p : A -> bool) (l : list A) (y z : A) (xs : list A),
+  rev (takeWhile p l) = y :: xs ->
+  In y l ->
+  In z l ->
+  p y = true ->
+  (exists l1 l2, l = l1 ++ y :: z :: l2) ->  (* z comes after y in l *)
+  p z = false.
+Proof.
+  intros A p l y z xs Htake Hy_in Hz_in Hy_sat [l1 [l2 Hl]].
+  (* The proof requires showing that if z satisfied the predicate,
+     it would be included in takeWhile, contradicting y being the last *)
+  admit.  (* This is a general property of takeWhile that would require careful induction *)
+Admitted.
+
+(*
+  Helper lemma: For i >= 5, fib i >= i >= 5
+*)
+Lemma fib_ge_5 : forall i,
+  i >= 5 -> fib i >= i.
+Proof.
+  intros i Hi.
+  apply fib_linear_growth.
+  assumption.
+Qed.
+
+(*
+  Helper lemma: Elements in fibs_upto n have indices bounded by the source sequence.
+  Since fibs_upto n uses seq 1 (S n), all indices are in [1, S n].
+*)
+Lemma in_fibs_upto_bounded : forall x n,
+  In x (fibs_upto n) -> exists k, 1 <= k <= S n /\ fib k = x.
+Proof.
+  intros x n Hin.
+  unfold fibs_upto in Hin.
+  remember (seq 1 (S n)) as l.
+  assert (Hbounds: forall y, In y l -> 1 <= y <= S n).
+  { intros y Hiny. rewrite Heql in Hiny.
+    apply in_seq in Hiny. lia. }
+  clear Heql.
+  induction l as [|a l' IH].
+  - (* Empty list, contradiction *)
+    simpl in Hin. inversion Hin.
+  - (* List is a :: l' *)
+    simpl in Hin.
+    destruct (Nat.leb (fib a) n) eqn:Hleb.
+    + (* fib a <= n, so a is included *)
+      simpl in Hin. destruct Hin as [Heq | Hin'].
+      * (* x = fib a *)
+        exists a. split.
+        -- apply Hbounds. left. reflexivity.
+        -- rewrite <- Heq. reflexivity.
+      * (* x is in the tail *)
+        assert (Hbounds': forall y, In y l' -> 1 <= y <= S n).
+        { intros y Hiny. apply Hbounds. right. assumption. }
+        apply IH; assumption.
+    + (* fib a > n, takeWhile stops *)
+      inversion Hin.
 Qed.
 
 Lemma largest_fib_in_fibs_upto : forall x i n xs,
@@ -1012,11 +1148,47 @@ Proof.
     { (* x is in fibs_upto n *)
       assert (Hin: In x (fibs_upto n)).
       { apply in_rev. rewrite Hrev. left. reflexivity. }
-      (* fibs_upto n uses source seq 1 (S n), so indices are in [1..S n] *)
-      unfold fibs_upto in Hin.
-      (* We need a lemma showing elements from takeWhile (map fib (seq 1 (S n)))
-         are of the form fib k for k in seq 1 (S n), i.e., 1 <= k <= S n *)
-      admit.  (* Needs helper lemma about source sequence bounds *)
+      (* Use in_fibs_upto_bounded to get the index bounds *)
+      destruct (in_fibs_upto_bounded x n Hin) as [k [Hk_bounds Hk_eq]].
+      (* Since Fibonacci is injective for indices >= 2, we need to handle k = 1 separately *)
+      destruct k as [|[|k']].
+      * (* k = 0, impossible since k >= 1 *)
+        lia.
+      * (* k = 1, so fib 1 = x = fib i, and i >= 2 *)
+        (* fib 1 = 1 and fib 2 = 1, so if i >= 2 and fib i = 1, then i = 2 *)
+        assert (Hi_eq_2: i = 2).
+        { simpl in Hk_eq. rewrite <- Hk_eq in Hx.
+          destruct i as [|[|i']]; try lia.
+          (* i >= 2, so i = 2 or i >= 3 *)
+          destruct i' as [|i'']; try reflexivity.
+          (* i >= 3, so i = S (S (S i'')), and fib i = fib (S (S (S i''))) *)
+          (* But fib i = x = fib 1 = 1 by Hx and Hk_eq *)
+          (* We know fib 3 = 2, so for i >= 3, fib i >= 2, contradicting fib i = 1 *)
+          exfalso.
+          (* Compute: fib 3 = 2 *)
+          assert (Hfib3: fib 3 = 2) by reflexivity.
+          (* For i'' = 0, i = 3, so fib 3 = 2 *)
+          destruct i'' as [|i'''].
+          + (* i = 3, fib 3 = 2, but Hx says fib 3 = 1, contradiction *)
+            rewrite Hfib3 in Hx. lia.
+          + (* i >= 4, so fib i >= fib 3 = 2, but Hx says fib i = 1 *)
+            (* Use fib_mono_strict to show fib (S (S (S (S i''')))) > fib 3 *)
+            (* But we don't have that lemma yet, so let's just compute a few more cases *)
+            assert (Hfib4: fib 4 = 3) by reflexivity.
+            destruct i''' as [|i''''].
+            * (* i = 4, fib 4 = 3, but Hx says fib 4 = 1 *)
+              rewrite Hfib4 in Hx. lia.
+            * (* i >= 5, so fib i >= i >= 5 > 1 *)
+              assert (Hfib_ge_i: fib (S (S (S (S (S i''''))))) >= S (S (S (S (S i''''))))).
+              { apply fib_ge_5. lia. }
+              rewrite Hx in Hfib_ge_i.
+              lia. }
+        rewrite Hi_eq_2. lia.
+      * (* k >= 2, use fib_injective *)
+        (* We have fib (S (S k')) = x and fib i = x, so fib (S (S k')) = fib i *)
+        (* This requires fib_injective, which is defined later in the file *)
+        (* TODO: Move fib_injective and fib_mono_lt earlier, or reorganize proofs *)
+        admit.
     }
 
     (* So we have i <= S n and S i > S n, which means i = S n *)
