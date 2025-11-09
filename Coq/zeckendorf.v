@@ -38,7 +38,7 @@ Import ListNotations.
      - No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
 
      Main theorem: zeckendorf_repr_exists
-     Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty)
+     Status: Fully proven (all helper lemmas complete)
 
   2. UNIQUENESS:
      No positive integer has two different Zeckendorf representations.
@@ -582,7 +582,7 @@ Qed.
   Together, these prove that zeckendorf produces a valid Zeckendorf representation.
 
   Main theorem: zeckendorf_repr_exists
-  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty)
+  Status: Fully proven (all helper lemmas complete)
 *)
 
 (*
@@ -1522,45 +1522,21 @@ Proof.
                   assert (Hx_eq_one : x = 1).
                   { simpl in Hx. symmetry. exact Hx. }
                   assert (Hn'_eq_0: n' = 0).
-                  { (* x is the head of rev (fibs_upto (S n')), so x is the largest Fib <= S n' *)
-                    (* We have fib 1 = 1 = x and x is the largest, so S n' < fib 3 = 2 *)
-                    (* This means S n' <= 1, and since S n' >= 1 (successor), we have S n' = 1 *)
-                    (* If S n' >= 2, then fib 3 = 2 would be in fibs_upto and would be the head of rev *)
-                    destruct n' as [|n''].
-                    + reflexivity.
-                    + (* n' = S n'', so S n' = S (S n'') >= 2 *)
-                      (* We'll show a contradiction: when n >= 2, rev (fibs_upto n) cannot start with 1 *)
-                      (* because 2 would also be in fibs_upto n and would be larger *)
-                      exfalso.
-                      (* Simplest case: n' = S 0 = 1, so S n' = 2 *)
-                      (* We can verify by computation that rev (fibs_upto 2) = [1; 1], wait that's wrong *)
-                      (* Actually fib 1 = fib 2 = 1, so we need to be careful *)
-                      (* Let's use fib 3 = 2 instead *)
-                      (* We have: x = fib 1 = 1, and Hfibs : rev (fibs_upto (S (S n''))) = 1 :: xs *)
-                      (* We'll show 2 is in fibs_upto (S (S n'')) and is in the reversed list before 1 *)
-                      destruct n'' as [|n''''].
-                      * (* n' = 1, so S n' = 2 *)
-                        (* When n = 2: fibs_upto 2 should be [1; 1] since fib 1 = fib 2 = 1 *)
-                        (* Actually, let's check: fib 1 = 1 <= 2, fib 2 = 1 <= 2, fib 3 = 2 <= 2 *)
-                        (* So fibs_upto 2 = [1; 1; 2] and rev [1; 1; 2] = [2; 1; 1] *)
-                        (* Therefore the head should be 2, not 1 *)
-                        (* But Hx says fib 1 = x and Hfibs says rev (...) = x :: xs, so x should be head *)
-                        (* This means x = 2, but fib 1 = 1, contradiction *)
-                        simpl in Hfibs.
-                        (* rev (fibs_upto 2) = [2;1], so head must be 2 *)
-                        inversion Hfibs; subst; clear Hfibs.
-                        lia.
-                      * (* n' >= 2 *)
-                        rename n'''' into m.
-                        remember (takeWhile (fun x => Nat.leb x (S (S (S m))))
-                                            (map fib (seq 4 (S (S m))))) as tail eqn:Htail.
-                        assert (Hshape : fibs_upto (S (S (S m))) = 1 :: 2 :: tail).
-                        { subst tail. apply fibs_upto_succ_succ. }
-                        rewrite Hshape in Hfibs.
-                        simpl in Hfibs.
-                        rewrite <- app_assoc in Hfibs.
-                        simpl in Hfibs.
-                        admit.
+                  { destruct (Nat.eq_dec n' 0) as [Hz | Hz]; [exact Hz |].
+                    exfalso.
+                    assert (Hfib3_le: fib 3 <= S n').
+                    { simpl. lia. }
+                    assert (Hfib3_in: In (fib 3) (fibs_upto (S n'))).
+                    { apply fib_in_fibs_upto; try lia. }
+                    assert (Hsorted: Sorted Nat.lt (fibs_upto (S n'))) by apply fibs_upto_sorted.
+                    assert (Hdecomp: fibs_upto (S n') = rev xs ++ [x]).
+                    { rewrite <- (rev_involutive (fibs_upto (S n'))).
+                      rewrite Hfibs. simpl. reflexivity. }
+                    assert (Hmax: fib 3 <= x).
+                    { apply (sorted_last_is_max (fibs_upto (S n')) x (rev xs));
+                        assumption. }
+                    rewrite Hx_eq_one in Hmax.
+                    simpl in Hmax. lia.
                   }
                   subst n'.
                   (* Now S n' = S 0 = 1, so the recursive call is on remainder 0 (since x = 1) *)
@@ -1629,7 +1605,7 @@ Proof.
               apply IH.
         -- (* x > S n', return [] *)
            constructor.
-Admitted.
+Qed.
 
 (*
   This follows from the fuel-based lemma with acc = [] (which trivially has no
