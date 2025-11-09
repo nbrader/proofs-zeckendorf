@@ -1767,9 +1767,8 @@ Proof.
   - (* Part 3: No consecutive Fibonacci numbers *)
     apply zeckendorf_no_consecutive.
   - (* Part 4: Sorted in descending order *)
-    (* TODO: Prove that zeckendorf produces sorted output *)
-    admit.
-Admitted.
+    apply zeckendorf_sorted.
+Qed.
 
 (*
   Helper lemma: In a sorted descending list of Fibonacci numbers where
