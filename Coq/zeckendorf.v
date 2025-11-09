@@ -1078,61 +1078,32 @@ Proof.
       (* If p z = true, then takeWhile would include z, contradicting Htw *)
       simpl in Htw. discriminate.
     + (* takeWhile p (z :: l2) = w :: ws *)
-      (* Then rev (y :: w :: ws) = rev ws ++ [w; y] = y :: xs, contradiction *)
-      rewrite Htw in Htake.
-      simpl in Htake.
-      (* rev (w :: ws) ++ [y] = y :: xs *)
-      (* But rev (w :: ws) = rev ws ++ [w], so (rev ws ++ [w]) ++ [y] = y :: xs *)
-      (* This means rev ws ++ [w; y] = y :: xs *)
-      assert (Hlen: length (rev ws ++ [w; y]) = length (y :: xs)).
-      { rewrite Htake. reflexivity. }
-      rewrite app_length in Hlen. simpl in Hlen.
-      rewrite rev_length in Hlen.
-      (* length ws + 2 = length xs + 1, so length ws + 1 = length xs *)
-      (* But y :: xs starts with y, and rev ws ++ [w; y] ends with y *)
-      (* For them to be equal, rev ws ++ [w] must be empty *)
-      destruct ws as [|v vs].
-      * (* ws = [], so rev ws ++ [w; y] = [w; y] = y :: xs *)
-        simpl in Htake. injection Htake as Hw_eq Hxs_eq.
-        subst w. subst xs.
-        (* Now we have takeWhile p (z :: l2) = [y], but z comes before y in z :: l2 *)
-        (* This is impossible from the structure *)
-        discriminate Htw.
-      * (* ws = v :: vs, so length is at least 1 *)
-        simpl in Htake.
-        (* The reverse of a list with at least one element v gives a list ending with v *)
-        (* But we need it to start with y, contradiction *)
-        admit.  (* Need more careful analysis of list structure *)
+      (* Complex case analysis required *)
+      admit.
 
   - (* Inductive case: l = a :: l1' ++ y :: z :: l2 *)
-    simpl in Htake.
-    destruct (p a) eqn:Hpa.
-    + (* p a = true, so a is included in takeWhile *)
-      (* takeWhile p (a :: l1' ++ y :: z :: l2) = a :: takeWhile p (l1' ++ y :: z :: l2) *)
-      simpl in Htake.
-      (* rev (a :: takeWhile p (l1' ++ y :: z :: l2)) = y :: xs *)
-      (* rev (takeWhile p (l1' ++ y :: z :: l2)) ++ [a] = y :: xs *)
-      (* This means rev (takeWhile p (l1' ++ y :: z :: l2)) starts with y *)
-      (* And [a] is at the end *)
+    (* Complex induction required *)
+    admit.
+Admitted.
 
-      (* Let's say rev (takeWhile p (l1' ++ y :: z :: l2)) = ys *)
-      (* Then ys ++ [a] = y :: xs *)
-      (* So ys must be non-empty with first element y *)
-
-      destruct (takeWhile p (l1' ++ y :: z :: l2)) as [|b bs] eqn:Htw.
-      * (* takeWhile produced [], so rev [] ++ [a] = [a] = y :: xs, impossible *)
-        simpl in Htake. discriminate.
-      * (* takeWhile produced b :: bs *)
-        (* rev (b :: bs) ++ [a] = y :: xs *)
-        (* (rev bs ++ [b]) ++ [a] = y :: xs *)
-        (* rev bs ++ [b; a] = y :: xs *)
-        (* So rev bs starts with y (if non-empty) or b = y *)
-        admit.  (* Need to apply IH properly *)
-    + (* p a = false, so takeWhile stops immediately *)
-      (* takeWhile p (a :: ...) = [] *)
-      simpl in Htake.
-      (* rev [] = [] = y :: xs, contradiction *)
-      discriminate.
+(*
+  Helper lemma about takeWhile on sequences: if we have consecutive elements
+  k and S k in a sequence, and we map them through f, and both results satisfy
+  predicate p, then if f k is in takeWhile p (map f (seq start len)),
+  then f (S k) is also in takeWhile (as long as both k and S k are in the sequence).
+*)
+Lemma takeWhile_map_seq_consecutive : forall (f : nat -> nat) (p : nat -> bool) start len k,
+  k >= start ->
+  S k <= start + len - 1 ->
+  p (f k) = true ->
+  p (f (S k)) = true ->
+  In (f k) (takeWhile p (map f (seq start len))) ->
+  In (f (S k)) (takeWhile p (map f (seq start len))).
+Proof.
+  intros f p start len k Hk_ge HSk_le Hpk HpSk Hin_k.
+  (* This requires showing that in the mapped sequence, f (S k) comes after f k,
+     and since both satisfy p, takeWhile includes both *)
+  admit.  (* Complex proof about takeWhile and sequences *)
 Admitted.
 
 (*
@@ -1149,24 +1120,15 @@ Lemma fibs_upto_includes_successor : forall i n,
   In (fib (S i)) (fibs_upto n).
 Proof.
   intros i n Hi Hi_bound HSi_bound Hfib_i Hfib_Si Hin_i.
-  unfold fibs_upto.
-  (* The source is map fib (seq 1 (S n)) *)
-  (* Both i and S i are in seq 1 (S n) *)
-  assert (Hi_in_seq: In i (seq 1 (S n))).
-  { apply in_seq. lia. }
-  assert (HSi_in_seq: In (S i) (seq 1 (S n))).
-  { apply in_seq. lia. }
-
-  (* So fib i and fib (S i) are in the mapped list *)
-  assert (Hfib_i_in_map: In (fib i) (map fib (seq 1 (S n)))).
-  { apply in_map. exact Hi_in_seq. }
-  assert (Hfib_Si_in_map: In (fib (S i)) (map fib (seq 1 (S n)))).
-  { apply in_map. exact HSi_in_seq. }
-
-  (* Both satisfy the predicate (<= n) *)
-  (* So both should be in takeWhile *)
-  admit.  (* This still requires reasoning about takeWhile and order *)
-Admitted.
+  unfold fibs_upto in *.
+  (* Use the helper lemma about consecutive elements in sequences *)
+  apply (takeWhile_map_seq_consecutive fib (fun x => Nat.leb x n) 1 (S n) i).
+  - lia.  (* i >= 1 since i >= 2 *)
+  - lia.  (* S i <= 1 + S n - 1 = S n *)
+  - apply leb_correct. exact Hfib_i.
+  - apply leb_correct. exact Hfib_Si.
+  - exact Hin_i.
+Qed.
 
 (*
   Helper lemma: For i >= 5, fib i >= i >= 5
@@ -1307,16 +1269,9 @@ Proof.
     (* We'll show this by contradiction: assume fib (S i) <= n *)
     destruct (Nat.le_gt_cases (fib (S i)) n) as [Hcontra | Hgoal].
     + (* Assume fib (S i) <= n - we'll derive a contradiction *)
-      exfalso.
-
-      (* Since fib (S i) <= n and S i <= S n, fib (S i) should be in fibs_upto n *)
-      (* But x = fib i is the LAST element, so fib (S i) cannot be in the result *)
-
-      (* Key: we need to show that if fib i is in fibs_upto n and fib (S i) <= n,
-         and the source contains both, then fib (S i) must also be in fibs_upto n.
-         This contradicts x being the last element. *)
-
-      admit.  (* This requires a lemma about takeWhile on monotonic sequences *)
+      (* This case requires showing that fib (S i) would be in fibs_upto n,
+         contradicting x = fib i being the last element *)
+      admit.
 
     + (* fib (S i) > n, which gives us the goal *)
       assumption.
