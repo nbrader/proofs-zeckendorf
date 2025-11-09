@@ -925,6 +925,26 @@ Proof.
     + simpl. tauto.
 Qed.
 
+Lemma fibs_upto_succ_succ : forall n,
+  fibs_upto (S (S n)) =
+    1 :: 2 ::
+      takeWhile (fun x => Nat.leb x (S (S n)))
+                (map fib (seq 4 (S n))).
+Proof.
+  intro n.
+  unfold fibs_upto.
+  simpl (seq 2 (S (S (S n)))).
+  simpl.
+  destruct (Nat.leb (fib 2) (S (S n))) eqn:Hleb1.
+  - simpl.
+    simpl (seq 3 (S (S n))).
+    simpl.
+    destruct (Nat.leb (fib 3) (S (S n))) eqn:Hleb2.
+    + simpl. reflexivity.
+    + apply Nat.leb_gt in Hleb2. simpl in Hleb2. lia.
+  - apply Nat.leb_gt in Hleb1. simpl in Hleb1. lia.
+Qed.
+
 (* Helper lemma: seq produces a strictly increasing sequence *)
 Lemma seq_ordered : forall start len x y,
   In x (seq start len) ->
@@ -1330,6 +1350,8 @@ Proof.
                 - (* i = 1: fib 1 = 1 = x, so x = 1 *)
                   (* When x = 1 is the largest Fib <= S n', we have S n' < 2 (otherwise fib 3 = 2 would be larger) *)
                   (* So S n' = 1, meaning n' = 0, and the remainder is 0 *)
+                  assert (Hx_eq_one : x = 1).
+                  { simpl in Hx. symmetry. exact Hx. }
                   assert (Hn'_eq_0: n' = 0).
                   { (* x is the head of rev (fibs_upto (S n')), so x is the largest Fib <= S n' *)
                     (* We have fib 1 = 1 = x and x is the largest, so S n' < fib 3 = 2 *)
@@ -1355,18 +1377,26 @@ Proof.
                         (* Therefore the head should be 2, not 1 *)
                         (* But Hx says fib 1 = x and Hfibs says rev (...) = x :: xs, so x should be head *)
                         (* This means x = 2, but fib 1 = 1, contradiction *)
-                        simpl in Hx. simpl in Hfibs.
-                        (* Let me compute fibs_upto 2 *)
-                        admit.
+                        simpl in Hfibs.
+                        (* rev (fibs_upto 2) = [2;1], so head must be 2 *)
+                        inversion Hfibs; subst; clear Hfibs.
+                        lia.
                       * (* n' >= 2 *)
+                        rename n'''' into m.
+                        remember (takeWhile (fun x => Nat.leb x (S (S (S m))))
+                                            (map fib (seq 4 (S (S m))))) as tail eqn:Htail.
+                        assert (Hshape : fibs_upto (S (S (S m))) = 1 :: 2 :: tail).
+                        { subst tail. apply fibs_upto_succ_succ. }
+                        rewrite Hshape in Hfibs.
+                        simpl in Hfibs.
+                        rewrite <- app_assoc in Hfibs.
+                        simpl in Hfibs.
                         admit.
                   }
                   subst n'.
                   (* Now S n' = S 0 = 1, so the recursive call is on remainder 0 (since x = 1) *)
                   (* Rewrite x = fib 1 = 1 in Hy *)
-                  assert (Hx_eq_1: x = 1).
-                  { simpl in Hx. symmetry. exact Hx. }
-                  rewrite Hx_eq_1 in Hy.
+                  rewrite Hx_eq_one in Hy.
                   simpl in Hy.
                   (* Now Hy : In y (zeckendorf_fuel fuel' 0 []) *)
                   (* zeckendorf_fuel fuel' 0 [] = [] for any fuel *)
