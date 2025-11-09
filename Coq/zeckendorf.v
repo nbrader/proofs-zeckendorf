@@ -856,6 +856,18 @@ Proof.
   lia.
 Qed.
 
+(* Helper lemma: the previous Fibonacci value never exceeds the current one *)
+Lemma fib_prev_le : forall k,
+  k >= 2 ->
+  fib (k - 1) <= fib k.
+Proof.
+  intros k Hk.
+  destruct k as [|[|k']]; try lia.
+  replace (S (S k') - 1) with (S k') by lia.
+  rewrite fib_SS.
+  apply Nat.le_add_r.
+Qed.
+
 (*
   Key property: If x is the head of rev(fibs_upto n) and x < n, then for
   x = fib(i), we have n < fib(i+1).
@@ -1931,21 +1943,55 @@ Proof.
     + (* n = 0 *)
       constructor.
     + (* n = S n' *)
-      remember (rev (fibs_upto (S n'))) as fibs.
+      remember (rev (fibs_upto (S n'))) as fibs eqn:Hfibs.
       destruct fibs as [|x xs].
       * (* fibs = [], return [] *)
         constructor.
       * (* fibs = x :: xs *)
-        destruct (Nat.leb x (S n')) eqn:Eleb.
+        destruct (Nat.leb x (S n')) eqn:Hleb.
         -- (* x <= S n', so we prepend x *)
-           (* We need to show: Sorted_dec (x :: zeckendorf_fuel fuel' (S n' - x) []) *)
-           (* This requires showing x is greater than all elements in the recursive result *)
-           (* For now, admit this as it requires proving properties about the relationship
-              between x and elements in zeckendorf_fuel fuel' (S n' - x) [] *)
-           admit.
+           remember (zeckendorf_fuel fuel' (S n' - x) []) as rest eqn:Hrest.
+           specialize (IH (S n' - x)).
+           rewrite <- Hrest in IH.
+           destruct rest as [|y ys].
+           ++ (* Recursive result empty: list [x] is sorted *)
+              constructor.
+           ++ (* Recursive result non-empty: need x > y and tail sorted *)
+              assert (Hy_le: y <= S n' - x).
+              { apply (zeckendorf_fuel_elements_bounded_empty fuel' (S n' - x) y).
+                rewrite <- Hrest.
+                simpl. left. reflexivity. }
+              assert (Hx_le: x <= S n') by (apply Nat.leb_le; exact Hleb).
+              assert (Hzero: zeckendorf_fuel fuel' 0 [] = []).
+              { destruct fuel'; reflexivity. }
+              assert (Hx_neq: x <> S n').
+              { intro Heq. subst x.
+                rewrite Nat.sub_diag in Hrest.
+                rewrite Hzero in Hrest.
+                discriminate. }
+              assert (Hx_lt: x < S n').
+              { destruct (Nat.lt_ge_cases x (S n')) as [Hlt | Hge]; auto.
+                exfalso. apply Hx_neq.
+                apply Nat.le_antisymm; assumption. }
+              assert (Hrev_eq: rev (fibs_upto (S n')) = x :: xs).
+              { symmetry. exact Hfibs. }
+              assert (Hin_rev: In x (rev (fibs_upto (S n')))).
+              { rewrite Hrev_eq. simpl. left. reflexivity. }
+              apply in_rev in Hin_rev.
+              destruct (in_fibs_upto_fib x (S n') Hin_rev) as [i [Hi_ge Hfib_eq]].
+              assert (Hn_lt_next: S n' < fib (S i)).
+              { eapply (largest_fib_in_fibs_upto x i (S n') xs); try eassumption. }
+              assert (Hrem_lt_prev: S n' - x < fib (i - 1)).
+              { rewrite <- Hfib_eq.
+                apply remainder_less_than_prev_fib; try assumption.
+                rewrite Hfib_eq. exact Hx_lt. }
+              assert (Hprev_le: fib (i - 1) <= x).
+              { rewrite <- Hfib_eq. apply fib_prev_le. exact Hi_ge. }
+              assert (Hrem_lt_x: S n' - x < x) by lia.
+              simpl. split; [lia | exact IH].
         -- (* x > S n', return [] *)
            constructor.
-Admitted.
+Qed.
 
 (* Theorem: zeckendorf produces sorted output *)
 Theorem zeckendorf_sorted : forall n,
