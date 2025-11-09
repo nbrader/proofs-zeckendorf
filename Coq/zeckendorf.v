@@ -902,6 +902,34 @@ Qed.
 
   For now, we admit this as a standard property of the greedy algorithm.
 *)
+
+(*
+  Helper lemma: For small n where fib (S n) < n, we have n < fib (S (S n)).
+  This property holds trivially since fib (S n) < n is impossible for n >= 2.
+*)
+Lemma fib_small_gap : forall n,
+  fib (S n) < n ->
+  n < fib (S (S n)).
+Proof.
+  intros n Hlt.
+  (* fib (S n) < n is actually impossible for n >= 2 *)
+  (* fib 1 = 1, fib 2 = 1, fib 3 = 2, fib 4 = 3, fib 5 = 5, ... *)
+  (* So fib (S 0) = fib 1 = 1, not < 0 *)
+  (* fib (S 1) = fib 2 = 1, not < 1 *)
+  (* fib (S 2) = fib 3 = 2, not < 2 *)
+  (* For n >= 2, we have fib (S n) >= n *)
+  destruct n as [|[|n']].
+  - (* n = 0: fib 1 = 1, not < 0 *)
+    simpl in Hlt. lia.
+  - (* n = 1: fib 2 = 1, not < 1 *)
+    simpl in Hlt. lia.
+  - (* n >= 2: fib (S (S n')) >= S (S n') *)
+    (* This contradicts the hypothesis *)
+    exfalso.
+    (* We need a lemma: fib (S (S n')) >= S (S n') for all n' *)
+    admit.  (* Needs fibonacci growth lemma *)
+Admitted.
+
 Lemma largest_fib_in_fibs_upto : forall x i n xs,
   i >= 2 ->
   fib i = x ->
@@ -969,10 +997,10 @@ Proof.
       rewrite Heq. rewrite Hx. assumption. }
 
     (* We need to show n < fib (S i) = fib (S (S n)) *)
-    (* Using Fibonacci recurrence: fib (S (S n)) = fib (S n) + fib n *)
-    (* Since fib (S n) < n and fib n > 0 (for n >= 1), we have...  *)
-
-    admit.  (* Need growth property: if fib (S n) < n, then n < fib (S (S n)) *)
+    (* Use the helper lemma fib_small_gap *)
+    rewrite Hi_eq.
+    apply fib_small_gap.
+    assumption.
 Admitted.
 
 (*
