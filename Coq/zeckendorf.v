@@ -1051,7 +1051,121 @@ Proof.
   intros A p l y z xs Htake Hy_in Hz_in Hy_sat [l1 [l2 Hl]].
   (* The proof requires showing that if z satisfied the predicate,
      it would be included in takeWhile, contradicting y being the last *)
-  admit.  (* This is a general property of takeWhile that would require careful induction *)
+
+  (* Substitute l = l1 ++ y :: z :: l2 *)
+  rewrite Hl in Htake.
+
+  (* Induction on l1 to analyze takeWhile (l1 ++ y :: z :: l2) *)
+  revert xs Htake.
+  induction l1 as [|a l1' IH]; intros xs Htake.
+
+  - (* Base case: l = y :: z :: l2 *)
+    simpl in Htake.
+    (* takeWhile p (y :: z :: l2) = if p y then y :: takeWhile p (z :: l2) else [] *)
+    rewrite Hy_sat in Htake.
+    simpl in Htake.
+    (* So takeWhile p (y :: z :: l2) = y :: takeWhile p (z :: l2) *)
+    (* rev (y :: takeWhile p (z :: l2)) = y :: xs *)
+    (* This means rev (takeWhile p (z :: l2)) ++ [y] = y :: xs *)
+    (* So takeWhile p (z :: l2) must be empty (otherwise y wouldn't be first in reverse) *)
+
+    (* If takeWhile p (z :: l2) is non-empty, then rev includes more elements after y *)
+    destruct (takeWhile p (z :: l2)) as [|w ws] eqn:Htw.
+    + (* takeWhile p (z :: l2) = [] *)
+      (* This means either z :: l2 = [] (impossible) or p (hd z (z :: l2)) = false *)
+      simpl in Htw.
+      destruct (p z) eqn:Hpz; try reflexivity.
+      (* If p z = true, then takeWhile would include z, contradicting Htw *)
+      simpl in Htw. discriminate.
+    + (* takeWhile p (z :: l2) = w :: ws *)
+      (* Then rev (y :: w :: ws) = rev ws ++ [w; y] = y :: xs, contradiction *)
+      rewrite Htw in Htake.
+      simpl in Htake.
+      (* rev (w :: ws) ++ [y] = y :: xs *)
+      (* But rev (w :: ws) = rev ws ++ [w], so (rev ws ++ [w]) ++ [y] = y :: xs *)
+      (* This means rev ws ++ [w; y] = y :: xs *)
+      assert (Hlen: length (rev ws ++ [w; y]) = length (y :: xs)).
+      { rewrite Htake. reflexivity. }
+      rewrite app_length in Hlen. simpl in Hlen.
+      rewrite rev_length in Hlen.
+      (* length ws + 2 = length xs + 1, so length ws + 1 = length xs *)
+      (* But y :: xs starts with y, and rev ws ++ [w; y] ends with y *)
+      (* For them to be equal, rev ws ++ [w] must be empty *)
+      destruct ws as [|v vs].
+      * (* ws = [], so rev ws ++ [w; y] = [w; y] = y :: xs *)
+        simpl in Htake. injection Htake as Hw_eq Hxs_eq.
+        subst w. subst xs.
+        (* Now we have takeWhile p (z :: l2) = [y], but z comes before y in z :: l2 *)
+        (* This is impossible from the structure *)
+        discriminate Htw.
+      * (* ws = v :: vs, so length is at least 1 *)
+        simpl in Htake.
+        (* The reverse of a list with at least one element v gives a list ending with v *)
+        (* But we need it to start with y, contradiction *)
+        admit.  (* Need more careful analysis of list structure *)
+
+  - (* Inductive case: l = a :: l1' ++ y :: z :: l2 *)
+    simpl in Htake.
+    destruct (p a) eqn:Hpa.
+    + (* p a = true, so a is included in takeWhile *)
+      (* takeWhile p (a :: l1' ++ y :: z :: l2) = a :: takeWhile p (l1' ++ y :: z :: l2) *)
+      simpl in Htake.
+      (* rev (a :: takeWhile p (l1' ++ y :: z :: l2)) = y :: xs *)
+      (* rev (takeWhile p (l1' ++ y :: z :: l2)) ++ [a] = y :: xs *)
+      (* This means rev (takeWhile p (l1' ++ y :: z :: l2)) starts with y *)
+      (* And [a] is at the end *)
+
+      (* Let's say rev (takeWhile p (l1' ++ y :: z :: l2)) = ys *)
+      (* Then ys ++ [a] = y :: xs *)
+      (* So ys must be non-empty with first element y *)
+
+      destruct (takeWhile p (l1' ++ y :: z :: l2)) as [|b bs] eqn:Htw.
+      * (* takeWhile produced [], so rev [] ++ [a] = [a] = y :: xs, impossible *)
+        simpl in Htake. discriminate.
+      * (* takeWhile produced b :: bs *)
+        (* rev (b :: bs) ++ [a] = y :: xs *)
+        (* (rev bs ++ [b]) ++ [a] = y :: xs *)
+        (* rev bs ++ [b; a] = y :: xs *)
+        (* So rev bs starts with y (if non-empty) or b = y *)
+        admit.  (* Need to apply IH properly *)
+    + (* p a = false, so takeWhile stops immediately *)
+      (* takeWhile p (a :: ...) = [] *)
+      simpl in Htake.
+      (* rev [] = [] = y :: xs, contradiction *)
+      discriminate.
+Admitted.
+
+(*
+  Helper lemma: If fib i is in fibs_upto n and fib (S i) <= n and S i <= S n,
+  then fib (S i) is also in fibs_upto n.
+*)
+Lemma fibs_upto_includes_successor : forall i n,
+  i >= 2 ->
+  i <= S n ->
+  S i <= S n ->
+  fib i <= n ->
+  fib (S i) <= n ->
+  In (fib i) (fibs_upto n) ->
+  In (fib (S i)) (fibs_upto n).
+Proof.
+  intros i n Hi Hi_bound HSi_bound Hfib_i Hfib_Si Hin_i.
+  unfold fibs_upto.
+  (* The source is map fib (seq 1 (S n)) *)
+  (* Both i and S i are in seq 1 (S n) *)
+  assert (Hi_in_seq: In i (seq 1 (S n))).
+  { apply in_seq. lia. }
+  assert (HSi_in_seq: In (S i) (seq 1 (S n))).
+  { apply in_seq. lia. }
+
+  (* So fib i and fib (S i) are in the mapped list *)
+  assert (Hfib_i_in_map: In (fib i) (map fib (seq 1 (S n)))).
+  { apply in_map. exact Hi_in_seq. }
+  assert (Hfib_Si_in_map: In (fib (S i)) (map fib (seq 1 (S n)))).
+  { apply in_map. exact HSi_in_seq. }
+
+  (* Both satisfy the predicate (<= n) *)
+  (* So both should be in takeWhile *)
+  admit.  (* This still requires reasoning about takeWhile and order *)
 Admitted.
 
 (*
@@ -1063,6 +1177,72 @@ Proof.
   intros i Hi.
   apply fib_linear_growth.
   assumption.
+Qed.
+
+(*
+  Helper lemma: fib is strictly monotonic on the range [2, ∞)
+
+  If i >= 2, j >= 2, and i < j, then fib(i) < fib(j).
+
+  Proof: By induction on j - i. Base case: if j = i + 1, use fib_mono.
+  Inductive case: use transitivity via fib(j-1).
+*)
+Lemma fib_mono_lt : forall i j,
+  i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
+Proof.
+  intros i j Hi Hj.
+  revert i Hi.
+  induction j as [j' IHj] using lt_wf_ind.
+  intros i Hi Hlt.
+  (* Case split: j = i + 1 or j > i + 1 *)
+  destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
+  - (* j = S i: use fib_mono directly *)
+    subst j'. apply fib_mono. assumption.
+  - (* j > S i: use transitivity *)
+    assert (Hj_gt: j' > S i) by lia.
+    assert (Hpred_ge: j' - 1 >= 2) by lia.
+    assert (Hpred_ge_i: j' - 1 >= i) by lia.
+    destruct (Nat.eq_dec (j' - 1) i) as [Heq_pred | Hneq_pred].
+    + (* j' - 1 = i, so j' = S i, contradicts Hneq *)
+      exfalso. lia.
+    + (* j' - 1 > i *)
+      assert (Hpred_gt: j' - 1 > i) by lia.
+      assert (Hpred_lt: j' - 1 < j') by lia.
+      (* Use IH to get fib i < fib (j' - 1) *)
+      assert (H1: fib i < fib (j' - 1)).
+      { apply IHj; try lia. }
+      (* Use fib_mono to get fib (j' - 1) < fib j' *)
+      assert (H2: fib (j' - 1) < fib j').
+      { replace j' with (S (j' - 1)) at 2 by lia.
+        apply fib_mono. assumption. }
+      (* Combine by transitivity *)
+      lia.
+Qed.
+
+(*
+  Helper: Fibonacci numbers are injective for indices >= 2
+
+  This states that if fib(i) = fib(j) for i,j >= 2, then i = j.
+
+  Proof: Use fib_mono_lt to show that fib is strictly monotonic for n >= 2,
+  which immediately gives us injectivity by trichotomy.
+*)
+Lemma fib_injective : forall i j,
+  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
+Proof.
+  intros i j Hi Hj Heq.
+  (* Use trichotomy: either i < j, i = j, or i > j *)
+  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heq_ij | Hgt]].
+  - (* Case 1: i < j, then fib i < fib j by fib_mono_lt, contradicting Heq *)
+    exfalso.
+    assert (H: fib i < fib j) by (apply fib_mono_lt; assumption).
+    lia.
+  - (* Case 2: i = j *)
+    assumption.
+  - (* Case 3: i > j, then fib j < fib i by fib_mono_lt, contradicting Heq *)
+    exfalso.
+    assert (H: fib j < fib i) by (apply fib_mono_lt; assumption).
+    lia.
 Qed.
 
 (*
@@ -1186,9 +1366,13 @@ Proof.
         rewrite Hi_eq_2. lia.
       * (* k >= 2, use fib_injective *)
         (* We have fib (S (S k')) = x and fib i = x, so fib (S (S k')) = fib i *)
-        (* This requires fib_injective, which is defined later in the file *)
-        (* TODO: Move fib_injective and fib_mono_lt earlier, or reorganize proofs *)
-        admit.
+        assert (Heq: fib (S (S k')) = fib i).
+        { transitivity x.
+          - exact Hk_eq.
+          - symmetry. exact Hx. }
+        assert (Hki: S (S k') = i).
+        { apply fib_injective; try lia; exact Heq. }
+        rewrite <- Hki. lia.
     }
 
     (* So we have i <= S n and S i > S n, which means i = S n *)
@@ -1374,72 +1558,6 @@ Fixpoint list_max (l : list nat) : option nat :=
                | Some m => Some (Nat.max x m)
                end
   end.
-
-(*
-  Helper lemma: fib is strictly monotonic on the range [2, ∞)
-
-  If i >= 2, j >= 2, and i < j, then fib(i) < fib(j).
-
-  Proof: By induction on j - i. Base case: if j = i + 1, use fib_mono.
-  Inductive case: use transitivity via fib(j-1).
-*)
-Lemma fib_mono_lt : forall i j,
-  i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
-Proof.
-  intros i j Hi Hj.
-  revert i Hi.
-  induction j as [j' IHj] using lt_wf_ind.
-  intros i Hi Hlt.
-  (* Case split: j = i + 1 or j > i + 1 *)
-  destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
-  - (* j = S i: use fib_mono directly *)
-    subst j'. apply fib_mono. assumption.
-  - (* j > S i: use transitivity *)
-    assert (Hj_gt: j' > S i) by lia.
-    assert (Hpred_ge: j' - 1 >= 2) by lia.
-    assert (Hpred_ge_i: j' - 1 >= i) by lia.
-    destruct (Nat.eq_dec (j' - 1) i) as [Heq_pred | Hneq_pred].
-    + (* j' - 1 = i, so j' = S i, contradicts Hneq *)
-      exfalso. lia.
-    + (* j' - 1 > i *)
-      assert (Hpred_gt: j' - 1 > i) by lia.
-      assert (Hpred_lt: j' - 1 < j') by lia.
-      (* Use IH to get fib i < fib (j' - 1) *)
-      assert (H1: fib i < fib (j' - 1)).
-      { apply IHj; try lia. }
-      (* Use fib_mono to get fib (j' - 1) < fib j' *)
-      assert (H2: fib (j' - 1) < fib j').
-      { replace j' with (S (j' - 1)) at 2 by lia.
-        apply fib_mono. assumption. }
-      (* Combine by transitivity *)
-      lia.
-Qed.
-
-(*
-  Helper: Fibonacci numbers are injective for indices >= 2
-
-  This states that if fib(i) = fib(j) for i,j >= 2, then i = j.
-
-  Proof: Use fib_mono_lt to show that fib is strictly monotonic for n >= 2,
-  which immediately gives us injectivity by trichotomy.
-*)
-Lemma fib_injective : forall i j,
-  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
-Proof.
-  intros i j Hi Hj Heq.
-  (* Use trichotomy: either i < j, i = j, or i > j *)
-  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heq_ij | Hgt]].
-  - (* Case 1: i < j, then fib i < fib j by fib_mono_lt, contradicting Heq *)
-    exfalso.
-    assert (H: fib i < fib j) by (apply fib_mono_lt; assumption).
-    lia.
-  - (* Case 2: i = j *)
-    assumption.
-  - (* Case 3: i > j, then fib j < fib i by fib_mono_lt, contradicting Heq *)
-    exfalso.
-    assert (H: fib j < fib i) by (apply fib_mono_lt; assumption).
-    lia.
-Qed.
 
 (* Helper: list_max of non-empty list is never None *)
 Lemma list_max_some : forall (x : nat) (xs : list nat),
