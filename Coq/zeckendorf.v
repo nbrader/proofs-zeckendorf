@@ -968,7 +968,186 @@ Proof.
     apply IH. intros y Hy. apply Hprefix. right. assumption.
 Qed.
 
-(* Helper lemma: if fib k <= n and k >= 1, then fib k is in fibs_upto n *)
+(* Helper lemma: fib is strictly monotonic for indices >= 2 *)
+Lemma fib_mono_lt : forall i j,
+  i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
+Proof.
+  intros i j Hi Hj.
+  revert i Hi.
+  induction j as [j' IHj] using lt_wf_ind.
+  intros i Hi Hlt.
+  (* Case split: j = i + 1 or j > i + 1 *)
+  destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
+  - (* j = S i: use fib_mono directly *)
+    subst j'. apply fib_mono. right. assumption.
+  - (* j > S i: use transitivity *)
+    assert (Hj_gt: j' > S i) by lia.
+    assert (Hpred_ge: j' - 1 >= 2) by lia.
+    assert (Hpred_ge_i: j' - 1 >= i) by lia.
+    destruct (Nat.eq_dec (j' - 1) i) as [Heq_pred | Hneq_pred].
+    + (* j' - 1 = i, so j' = S i, contradicts Hneq *)
+      exfalso. lia.
+    + (* j' - 1 > i *)
+      assert (Hpred_gt: j' - 1 > i) by lia.
+      assert (Hpred_lt: j' - 1 < j') by lia.
+      (* Use IH to get fib i < fib (j' - 1) *)
+      assert (H1: fib i < fib (j' - 1)).
+      { apply IHj; try lia. }
+      (* Use fib_mono to get fib (j' - 1) < fib j' *)
+      assert (H2: fib (j' - 1) < fib j').
+      { replace j' with (S (j' - 1)) at 2 by lia.
+        apply fib_mono. right. assumption. }
+      (* Combine by transitivity *)
+      lia.
+Qed.
+
+(* Helper lemma: Fibonacci numbers grow at least linearly for n >= 5 *)
+Lemma fib_linear_growth : forall n,
+  n >= 5 ->
+  fib n >= n.
+Proof.
+  intros n Hn.
+  (* Use strong induction from n = 5 upward *)
+  remember (n - 5) as k eqn:Hk.
+  assert (Heq: n = 5 + k) by lia.
+  clear Hk. subst n.
+  induction k as [|k' IH].
+  - (* Base case: n = 5, fib 5 = 5 *)
+    simpl. lia.
+  - (* Inductive case: n = 6 + k' *)
+    (* IH says: fib (5 + k') >= 5 + k' *)
+    (* Goal: fib (6 + k') >= 6 + k' *)
+
+    (* Apply the induction hypothesis *)
+    assert (HIH: fib (S (S (S (S (S k'))))) >= S (S (S (S (S k'))))).
+    { apply IH. lia. }
+
+    (* We need to show: fib(S(S(S(S(S(S k')))))) >= S(S(S(S(S(S k'))))) *)
+    (* Use the fact that fib(n+2) = fib(n+1) + fib(n) >= fib(n+1) >= ... *)
+
+    (* For clarity, let's just compute using the recurrence *)
+    (* fib(6+k') >= fib(5+k') + fib(4+k') by Fibonacci property *)
+    (* We have fib(5+k') >= 5+k' by IH *)
+    (* And fib(4+k') >= 1 (since it's a positive Fibonacci number) *)
+
+    assert (Hpos: fib (S (S (S (S k')))) >= 1).
+    { destruct k'.
+      - simpl. lia.
+      - apply fib_pos. lia. }
+
+    (* Key insight: We can show fib(S(S n)) >= fib(S n) + 1 for large n *)
+    (* Actually, just use: fib(6+k') >= fib(5+k') >= 5+k', and since fib is increasing... *)
+
+    (* Simpler: show fib(6+k') >= 6+k' directly using that fib grows *)
+    (* We know fib(5+k') >= 5+k' *)
+    (* And fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* We need to combine the facts to show the goal *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* We have: fib(5+k') >= 5+k', fib(4+k') >= 1 *)
+    (* And: fib(6+k') = fib(5+k') + fib(4+k') by Fibonacci recurrence *)
+
+    (* The recurrence fib(S(S n)) = fib(S n) + fib n is proven in fib_SS *)
+    (* For n = S(S(S(S k'))), this gives fib(6+k') = fib(5+k') + fib(4+k') *)
+
+    (* Since lia has trouble with fib, let's use explicit bounds *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* From fib_SS: fib(6+k') = fib(5+k') + fib(4+k') *)
+    (* From HIH: fib(5+k') >= 5+k' *)
+    (* From Hpos: fib(4+k') >= 1 *)
+    (* Therefore: fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* Apply fib_SS to get the equality *)
+    assert (Hfib_eq: fib (S (S (S (S (S (S k')))))) =
+                     fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
+    { apply fib_SS. }
+
+    (* Rewrite the goal using this equality *)
+    (* Goal: fib(6+k') >= 6+k' *)
+    (* We have Hfib_eq: fib(6+k') = fib(5+k') + fib(4+k') *)
+    (*         HIH: fib(5+k') >= 5+k' *)
+    (*         Hpos: fib(4+k') >= 1 *)
+
+    (* Combine these facts *)
+    (* From Hfib_eq, HIH, and Hpos, we can conclude the goal *)
+    (* fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
+
+    (* Let me try explicit reasoning since lia might not handle fib well *)
+    assert (Hgoal: S (S (S (S (S (S k'))))) <=
+                   fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
+    { (* fib(5+k') + fib(4+k') >= (5+k') + 1 *)
+      assert (H1: S (S (S (S (S k')))) <= fib (S (S (S (S (S k')))))).
+      { exact HIH. }
+      assert (H2: 1 <= fib (S (S (S (S k'))))).
+      { exact Hpos. }
+      (* Now (5+k') + 1 <= fib(5+k') + fib(4+k') *)
+      lia. }
+
+    (* Combine with Hfib_eq *)
+    rewrite <- Hfib_eq in Hgoal.
+    exact Hgoal.
+Qed.
+
+(* Helper lemma: elements in the tail of seq are strictly greater than the head *)
+Lemma seq_tail_gt_head : forall start len i is,
+  seq start (S len) = i :: is ->
+  forall k, In k is -> k > i.
+Proof.
+  intros start len i is Hseq k Hk_in.
+  (* seq start (S len) = start :: seq (S start) len *)
+  simpl in Hseq.
+  injection Hseq as Hi His.
+  subst i. subst is.
+  (* Now k is in seq (S start) len *)
+  apply seq_ge in Hk_in.
+  lia.
+Qed.
+
+(* Helper lemma: if fib k passes the filter and k is in a sequence from seq,
+   then fib k is in the takeWhile result *)
+Lemma fib_in_takeWhile_seq : forall k n start len,
+  start >= 2 ->
+  k >= 2 ->
+  fib k <= n ->
+  In k (seq start len) ->
+  In (fib k) (takeWhile (fun x => Nat.leb x n) (map fib (seq start len))).
+Proof.
+  intros k n start len Hstart_ge Hk_ge Hfib_le Hk_in.
+  generalize dependent start.
+  induction len as [|len' IH]; intros start Hstart_ge Hk_in.
+  - (* len = 0: empty sequence, contradiction *)
+    simpl in Hk_in. contradiction.
+  - (* len = S len' *)
+    simpl in Hk_in.
+    destruct Hk_in as [Hk_eq|Hk_in'].
+    + (* k = start *)
+      subst k.
+      simpl.
+      apply Nat.leb_le in Hfib_le.
+      rewrite Hfib_le.
+      simpl. left. reflexivity.
+    + (* k in seq (S start) len' *)
+      simpl.
+      destruct (Nat.leb (fib start) n) eqn:Efib_start.
+      * (* fib start <= n *)
+        simpl. right.
+        apply IH; try assumption.
+        lia.
+      * (* fib start > n *)
+        (* This means k > start (since k is in the tail), so fib k > fib start > n *)
+        (* But we have fib k <= n, contradiction *)
+        exfalso.
+        apply Nat.leb_gt in Efib_start.
+        (* We need to show k > start to use monotonicity *)
+        assert (Hk_gt: k > start).
+        { apply seq_ge in Hk_in'. lia. }
+        (* By monotonicity, fib k > fib start when k > start and start >= 2 *)
+        assert (Hfib_gt: fib k > fib start).
+        { apply fib_mono_lt; lia. }
+        lia.
+Qed.
+
+(* Helper lemma: if fib k <= n and k >= 2, then fib k is in fibs_upto n *)
 Lemma fib_in_fibs_upto : forall k n,
   k >= 2 ->
   fib k <= n ->
@@ -976,68 +1155,66 @@ Lemma fib_in_fibs_upto : forall k n,
 Proof.
   intros k n Hk_ge Hfib_le.
   unfold fibs_upto.
-  (* Strategy: show k is in seq 2 (S n), then use properties of takeWhile *)
 
   (* First, establish that k <= S n *)
   assert (Hk_bound: k <= S n).
   { destruct (le_lt_dec k 4) as [Hk_small|Hk_large].
     - (* k <= 4, so k <= S n for any n >= 3 *)
       destruct n as [|[|[|n']]].
-      + (* n = 0: fib k <= 0 implies fib k = 0, but k >= 1 means fib k >= 1, contradiction *)
+      + (* n = 0: fib k <= 0 implies fib k = 0, but k >= 2 means fib k >= 1, contradiction *)
         assert (Hfib_pos: fib k >= 1).
         { apply fib_pos. lia. }
         lia.
-      + (* n = 1: fib k <= 1 and k >= 1 means k in {1, 2}, so k <= 2 = S 1 *)
-        admit.
-      + (* n = 2: fib k <= 2 and k >= 1, checking cases *)
-        admit.
+      + (* n = 1: fib k <= 1 and k >= 2 and k <= 4 *)
+        (* fib 2 = 1, fib 3 = 2, fib 4 = 3 *)
+        (* So fib k <= 1 and k >= 2 and k <= 4 implies k = 2, thus k <= 2 = S 1 *)
+        assert (Hfib_2: fib 2 = 1) by reflexivity.
+        assert (Hfib_3: fib 3 = 2) by reflexivity.
+        assert (Hfib_4: fib 4 = 3) by reflexivity.
+        (* Case analysis on k *)
+        destruct (eq_nat_dec k 2) as [Heq2|Hne2].
+        * (* k = 2 *) lia.
+        * (* k <> 2, so k >= 3 *)
+          destruct (eq_nat_dec k 3) as [Heq3|Hne3].
+          -- (* k = 3: fib 3 = 2 > 1, contradiction *)
+             subst k. lia.
+          -- (* k <> 3, so k >= 4, but k <= 4, so k = 4 *)
+             assert (k = 4) by lia.
+             subst k. lia.
+      + (* n = 2: fib k <= 2 and k >= 2 *)
+        (* fib 2 = 1, fib 3 = 2, fib 4 = 3 *)
+        (* So if fib k <= 2 and k >= 2, then k in {2, 3}, so k <= 3 = S 2 *)
+        assert (Hfib_2: fib 2 = 1) by reflexivity.
+        assert (Hfib_3: fib 3 = 2) by reflexivity.
+        assert (Hfib_4: fib 4 = 3) by reflexivity.
+        destruct (eq_nat_dec k 2), (eq_nat_dec k 3).
+        * lia.
+        * lia.
+        * lia.
+        * (* k <> 2, k <> 3, k <= 4 (from Hk_small), k >= 2 (from Hk_ge) *)
+          (* So k = 4 *)
+          assert (k = 4) by lia.
+          subst k.
+          (* fib 4 = 3 > 2, contradicts fib k <= n = 2 *)
+          lia.
       + (* n >= 3: k <= 4 < S (S (S (S n'))) *)
         lia.
     - (* k > 4, so k >= 5 *)
-      admit.
+      (* We use the growth property: for k >= 5, fib k >= k *)
+      assert (Hfib_ge_k: fib k >= k).
+      { apply fib_linear_growth. lia. }
+      (* Since fib k <= n and fib k >= k, we have k <= n, thus k <= S n *)
+      lia.
   }
 
   (* Now k is in seq 2 (S n) *)
   assert (Hk_in_seq: In k (seq 2 (S n))).
   { apply in_seq. lia. }
 
-  (* fib k is in map fib (seq 2 (S n)) *)
-  assert (Hfib_in_map: In (fib k) (map fib (seq 2 (S n)))).
-  { apply in_map. assumption. }
-
-  (* Now we need to show fib k passes the takeWhile filter *)
-  (* We'll do this by showing all Fibonacci numbers <= fib k in the sequence pass the filter *)
-
-  (* Use induction on the sequence structure, specialized approach *)
-  clear Hfib_in_map Hk_in_seq.
-  remember (seq 2 (S n)) as indices.
-  assert (H_k_in: In k indices).
-  { subst indices. apply in_seq. lia. }
-  clear Heqindices Hk_bound.
-
-  (* We need a different approach: prove directly by induction on indices *)
-  generalize dependent k.
-  induction indices as [|i is IH]; intros k Hk_ge Hfib_le H_k_in.
-  - (* Empty list: contradiction *)
-    inversion H_k_in.
-  - (* i :: is *)
-    simpl. simpl in H_k_in.
-    destruct (Nat.leb (fib i) n) eqn:Efib_i.
-    + (* fib i <= n, so it's included *)
-      simpl. destruct H_k_in as [H_eq|H_in].
-      * (* k = i *)
-        left. rewrite H_eq. reflexivity.
-      * (* k is in is *)
-        right. apply IH; assumption.
-    + (* fib i > n *)
-      (* This means all remaining elements will also be filtered out *)
-      (* But this contradicts our hypothesis if k = i *)
-      destruct H_k_in as [H_eq|H_in].
-      * (* k = i, but fib i > n contradicts fib k <= n *)
-        admit.
-      * (* k is in is, but takeWhile stops here *)
-        admit.
-Admitted.
+  (* Use the helper lemma *)
+  apply fib_in_takeWhile_seq; try assumption.
+  lia.
+Qed.
 
 (* Helper lemma: elements in zeckendorf_fuel result (with empty acc) are bounded by the input n *)
 Lemma zeckendorf_fuel_elements_bounded_empty : forall fuel n x,
@@ -1255,92 +1432,6 @@ Proof.
            constructor.
 Admitted.
 
-Lemma fib_linear_growth : forall n,
-  n >= 5 ->
-  fib n >= n.
-Proof.
-  intros n Hn.
-  (* Use strong induction from n = 5 upward *)
-  remember (n - 5) as k eqn:Hk.
-  assert (Heq: n = 5 + k) by lia.
-  clear Hk. subst n.
-  induction k as [|k' IH].
-  - (* Base case: n = 5, fib 5 = 5 *)
-    simpl. lia.
-  - (* Inductive case: n = 6 + k' *)
-    (* IH says: fib (5 + k') >= 5 + k' *)
-    (* Goal: fib (6 + k') >= 6 + k' *)
-
-    (* Apply the induction hypothesis *)
-    assert (HIH: fib (S (S (S (S (S k'))))) >= S (S (S (S (S k'))))).
-    { apply IH. lia. }
-
-    (* We need to show: fib(S(S(S(S(S(S k')))))) >= S(S(S(S(S(S k'))))) *)
-    (* Use the fact that fib(n+2) = fib(n+1) + fib(n) >= fib(n+1) >= ... *)
-
-    (* For clarity, let's just compute using the recurrence *)
-    (* fib(6+k') >= fib(5+k') + fib(4+k') by Fibonacci property *)
-    (* We have fib(5+k') >= 5+k' by IH *)
-    (* And fib(4+k') >= 1 (since it's a positive Fibonacci number) *)
-
-    assert (Hpos: fib (S (S (S (S k')))) >= 1).
-    { destruct k'.
-      - simpl. lia.
-      - apply fib_pos. lia. }
-
-    (* Key insight: We can show fib(S(S n)) >= fib(S n) + 1 for large n *)
-    (* Actually, just use: fib(6+k') >= fib(5+k') >= 5+k', and since fib is increasing... *)
-
-    (* Simpler: show fib(6+k') >= 6+k' directly using that fib grows *)
-    (* We know fib(5+k') >= 5+k' *)
-    (* And fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
-
-    (* We need to combine the facts to show the goal *)
-    (* Goal: fib(6+k') >= 6+k' *)
-    (* We have: fib(5+k') >= 5+k', fib(4+k') >= 1 *)
-    (* And: fib(6+k') = fib(5+k') + fib(4+k') by Fibonacci recurrence *)
-
-    (* The recurrence fib(S(S n)) = fib(S n) + fib n is proven in fib_SS *)
-    (* For n = S(S(S(S k'))), this gives fib(6+k') = fib(5+k') + fib(4+k') *)
-
-    (* Since lia has trouble with fib, let's use explicit bounds *)
-    (* Goal: fib(6+k') >= 6+k' *)
-    (* From fib_SS: fib(6+k') = fib(5+k') + fib(4+k') *)
-    (* From HIH: fib(5+k') >= 5+k' *)
-    (* From Hpos: fib(4+k') >= 1 *)
-    (* Therefore: fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
-
-    (* Apply fib_SS to get the equality *)
-    assert (Hfib_eq: fib (S (S (S (S (S (S k')))))) =
-                     fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
-    { apply fib_SS. }
-
-    (* Rewrite the goal using this equality *)
-    (* Goal: fib(6+k') >= 6+k' *)
-    (* We have Hfib_eq: fib(6+k') = fib(5+k') + fib(4+k') *)
-    (*         HIH: fib(5+k') >= 5+k' *)
-    (*         Hpos: fib(4+k') >= 1 *)
-
-    (* Combine these facts *)
-    (* From Hfib_eq, HIH, and Hpos, we can conclude the goal *)
-    (* fib(6+k') = fib(5+k') + fib(4+k') >= (5+k') + 1 = 6+k' *)
-
-    (* Let me try explicit reasoning since lia might not handle fib well *)
-    assert (Hgoal: S (S (S (S (S (S k'))))) <=
-                   fib (S (S (S (S (S k'))))) + fib (S (S (S (S k'))))).
-    { (* fib(5+k') + fib(4+k') >= (5+k') + 1 *)
-      assert (H1: S (S (S (S (S k')))) <= fib (S (S (S (S (S k')))))).
-      { exact HIH. }
-      assert (H2: 1 <= fib (S (S (S (S k'))))).
-      { exact Hpos. }
-      (* Now (5+k') + 1 <= fib(5+k') + fib(4+k') *)
-      lia. }
-
-    (* Combine with Hfib_eq *)
-    rewrite <- Hfib_eq in Hgoal.
-    exact Hgoal.
-Qed.
-
 (*
   This follows from the fuel-based lemma with acc = [] (which trivially has no
   consecutive Fibs since it's empty).
@@ -1390,46 +1481,6 @@ Proof.
       exfalso.
       assert (Hgrowth: fib (S (S (S (S (S (S n'')))))) >= S (S (S (S (S (S n'')))))).
       { apply fib_linear_growth. lia. }
-      lia.
-Qed.
-
-(*
-  Helper lemma: fib is strictly monotonic on the range [2, ∞)
-
-  If i >= 2, j >= 2, and i < j, then fib(i) < fib(j).
-
-  Proof: By induction on j - i. Base case: if j = i + 1, use fib_mono.
-  Inductive case: use transitivity via fib(j-1).
-*)
-Lemma fib_mono_lt : forall i j,
-  i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
-Proof.
-  intros i j Hi Hj.
-  revert i Hi.
-  induction j as [j' IHj] using lt_wf_ind.
-  intros i Hi Hlt.
-  (* Case split: j = i + 1 or j > i + 1 *)
-  destruct (Nat.eq_dec j' (S i)) as [Heq | Hneq].
-  - (* j = S i: use fib_mono directly *)
-    subst j'. apply fib_mono. right. assumption.
-  - (* j > S i: use transitivity *)
-    assert (Hj_gt: j' > S i) by lia.
-    assert (Hpred_ge: j' - 1 >= 2) by lia.
-    assert (Hpred_ge_i: j' - 1 >= i) by lia.
-    destruct (Nat.eq_dec (j' - 1) i) as [Heq_pred | Hneq_pred].
-    + (* j' - 1 = i, so j' = S i, contradicts Hneq *)
-      exfalso. lia.
-    + (* j' - 1 > i *)
-      assert (Hpred_gt: j' - 1 > i) by lia.
-      assert (Hpred_lt: j' - 1 < j') by lia.
-      (* Use IH to get fib i < fib (j' - 1) *)
-      assert (H1: fib i < fib (j' - 1)).
-      { apply IHj; try lia. }
-      (* Use fib_mono to get fib (j' - 1) < fib j' *)
-      assert (H2: fib (j' - 1) < fib j').
-      { replace j' with (S (j' - 1)) at 2 by lia.
-        apply fib_mono. right. assumption. }
-      (* Combine by transitivity *)
       lia.
 Qed.
 
