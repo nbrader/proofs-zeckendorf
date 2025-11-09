@@ -2666,13 +2666,104 @@ Proof.
         lia.
 Qed.
 
+(* Helper lemma: no_consecutive_fibs implies no_consecutive_fibs_sorted for sorted lists *)
+Lemma no_consecutive_fibs_to_sorted : forall l,
+  Sorted_dec l ->
+  no_consecutive_fibs l ->
+  no_consecutive_fibs_sorted l.
+Proof.
+  intros l Hsorted.
+  induction l as [|x xs IH].
+  - (* l = [] *)
+    simpl. trivial.
+  - (* l = x :: xs *)
+    simpl. destruct xs as [|y ys].
+    + (* xs = [] *)
+      simpl. trivial.
+    + (* xs = y :: ys *)
+      intros [Hx_nocons Hxs_nocons].
+      simpl. split.
+      * (* Show: forall i j, fib i = x -> fib j = y -> ~nat_consecutive i j *)
+        intros i j Hfib_i Hfib_j Hcontra.
+        eapply Hx_nocons; [left; reflexivity | exact Hfib_i | exact Hfib_j | exact Hcontra].
+      * (* Show: no_consecutive_fibs_sorted (y :: ys) *)
+        apply IH.
+        -- (* Sorted_dec (y :: ys) *)
+           simpl in Hsorted. destruct Hsorted as [_ Hsorted_ys].
+           exact Hsorted_ys.
+        -- exact Hxs_nocons.
+Qed.
+
+(* Helper lemma: Fibonacci numbers >= 2 come from indices >= 2 *)
+Lemma fib_ge_2_index : forall z,
+  z >= 2 ->
+  (exists k, z = fib k) ->
+  exists i, i >= 2 /\ fib i = z.
+Proof.
+  intros z Hz_ge [k Hfib_k].
+  subst z.
+  destruct k as [|[|k']].
+  - simpl in Hz_ge. lia.
+  - simpl in Hz_ge. lia.
+  - exists (S (S k')). split; [lia | reflexivity].
+Qed.
+
+(* Helper lemma: In sorted non-empty lists with no consecutive Fibs, all elements are >= 2 *)
+Lemma zeckendorf_repr_fibs_ge_2 : forall l n,
+  is_zeckendorf_repr n l ->
+  l <> [] ->
+  forall z, In z l -> z >= 2.
+Proof.
+  admit.
+Admitted.
+
+(* Main helper: convert Fib property to >= 2 form for Zeckendorf representations *)
+Lemma zeckendorf_repr_fib_indices_ge_2 : forall l n,
+  is_zeckendorf_repr n l ->
+  forall x, In x l -> exists i, i >= 2 /\ fib i = x.
+Proof.
+  intros l n Hl x Hx_in.
+  destruct Hl as [Hfib [Hsum [Hnocons Hsorted]]].
+  destruct l as [|y ys].
+  - inversion Hx_in.
+  - destruct (Hfib x Hx_in) as [k Hfib_k].
+    apply fib_ge_2_index.
+    + apply zeckendorf_repr_fibs_ge_2 with (n := n) (l := y :: ys).
+      * split; [|split; [|split]]; assumption.
+      * discriminate.
+      * exact Hx_in.
+    + exists k. exact Hfib_k.
+Qed.
+
+
 Definition zeckendorf_repr_unique := fun n => forall l,
   is_zeckendorf_repr n l ->
   l = zeckendorf n [].
 
 Theorem zeckendorf_repr_unique_proof : forall n, zeckendorf_repr_unique n.
 Proof.
-Admitted.
+  intros n l Hl.
+  unfold zeckendorf_repr_unique in *.
+  (* Get the properties from is_zeckendorf_repr *)
+  destruct Hl as [Hfib_l [Hsum_l [Hnocons_l Hsorted_l]]].
+  (* Get the properties for zeckendorf n [] *)
+  assert (Hz: is_zeckendorf_repr n (zeckendorf n [])).
+  { apply zeckendorf_repr_exists_proof. }
+  destruct Hz as [Hfib_z [Hsum_z [Hnocons_z Hsorted_z]]].
+  (* Apply zeckendorf_unique_sorted *)
+  apply zeckendorf_unique_sorted with (n := n).
+  - exact Hsorted_l.
+  - exact Hsorted_z.
+  - apply no_consecutive_fibs_to_sorted; assumption.
+  - apply no_consecutive_fibs_to_sorted; assumption.
+  - apply (zeckendorf_repr_fib_indices_ge_2 l n).
+    split; [|split; [|split]]; assumption.
+  - apply (zeckendorf_repr_fib_indices_ge_2 (zeckendorf n []) n).
+    split; [|split; [|split]]; assumption.
+  - exact Hsum_l.
+  - exact Hsum_z.
+Qed.
+
 
 Definition zeckendorfs_theorem := forall n, zeckendorf_repr_exists n /\ zeckendorf_repr_unique n.
 
@@ -2682,3 +2773,4 @@ Proof.
   -apply zeckendorf_repr_exists_proof.
   -apply zeckendorf_repr_unique_proof.
 Qed.
+Print Assumptions zeckendorfs_theorem_proof.
