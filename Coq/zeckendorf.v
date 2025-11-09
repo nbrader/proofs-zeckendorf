@@ -1,4 +1,5 @@
 Require Import Coq.Lists.List.
+Require Import Coq.Sorting.Sorted.
 Require Import Coq.Arith.Arith.
 Require Import Coq.Arith.Le.
 Require Import Coq.Wellfounded.Lexicographic_Product.
@@ -881,6 +882,45 @@ Qed.
   For now, we admit this as a standard property of the greedy algorithm.
 *)
 
+(* Helper lemma: map fib over a sequence produces a sorted (ascending) list *)
+Lemma map_fib_seq_sorted : forall start len,
+  start >= 2 ->
+  Sorted Nat.lt (map fib (seq start len)).
+Proof.
+  (* This follows from the fact that fib is strictly increasing for indices >= 2 *)
+  admit.
+Admitted.
+
+(* Helper lemma: takeWhile preserves sorting *)
+Lemma takeWhile_sorted : forall {A} (f : A -> bool) (R : A -> A -> Prop) l,
+  Sorted R l ->
+  Sorted R (takeWhile f l).
+Proof.
+  (* This follows from the fact that takeWhile produces a sublist, and sublists preserve sorting *)
+  admit.
+Admitted.
+
+(* Helper lemma: fibs_upto produces a sorted list *)
+Lemma fibs_upto_sorted : forall n,
+  Sorted Nat.lt (fibs_upto n).
+Proof.
+  intro n.
+  unfold fibs_upto.
+  apply takeWhile_sorted.
+  apply map_fib_seq_sorted.
+  lia.
+Qed.
+
+(* Helper lemma: in a sorted list, the last element is >= all other elements *)
+Lemma sorted_last_is_max : forall l x xs,
+  Sorted Nat.lt l ->
+  l = xs ++ [x] ->
+  forall y, In y l -> y <= x.
+Proof.
+  (* This follows from transitivity of the sorted order *)
+  admit.
+Admitted.
+
 Lemma largest_fib_in_fibs_upto : forall x i n xs,
   i >= 2 ->
   fib i = x ->
@@ -888,22 +928,21 @@ Lemma largest_fib_in_fibs_upto : forall x i n xs,
   x < n ->
   n < fib (S i).
 Proof.
+  intros x i n xs Hi_ge Hfib_i Hrev Hx_lt.
   (* This requires reasoning about takeWhile on monotonic sequences.
-     The intuition: fibs_upto n = takeWhile (<=n) [fib 1, fib 2, fib 3, ...]
+     The intuition: fibs_upto n = takeWhile (<=n) [fib 2, fib 3, ...]
      Since Fibonacci is monotonic increasing, takeWhile stops at the first
      Fibonacci > n. So the last element taken (= first element of reversed list)
      is the largest Fibonacci <= n, call it fib(i). The next Fibonacci fib(i+1)
      must be > n (otherwise it would have been included).
 
-     A complete proof would require:
-     1. Proving map fib (seq 2 (S n)) contains fib 1 through fib n in order
-     2. Proving Fibonacci is monotonic (we have this: fib_mono)
-     3. Proving takeWhile on a monotonic sequence with a monotonic predicate
-        has the property that if it includes fib k, then either:
-        - fib (k+1) is not in the source list, OR
-        - fib (k+1) fails the predicate
+     A complete proof would show:
+     1. fibs_upto produces a sorted list (helper lemma admitted above)
+     2. x is the largest element (last in sorted list)
+     3. If fib (S i) <= n, it would be in fibs_upto n
+     4. But fib (S i) > x, contradicting x being largest
 
-     For now, we admit this as it's a standard property of the greedy algorithm. *)
+     For now, we admit this. *)
   admit.
 Admitted.
 
