@@ -947,6 +947,51 @@ Proof.
   lia.
 Qed.
 
+(* Helper lemma: all elements in xs are strictly less than x when xs ++ [x] is sorted *)
+Lemma sorted_app_singleton_all_lt : forall xs x,
+  Sorted Nat.lt (xs ++ [x]) ->
+  forall y, In y xs -> y < x.
+Proof.
+  induction xs as [|a xs' IH]; intros x Hsorted y Hy.
+  - (* xs = [] *)
+    simpl in Hy. contradiction.
+  - (* xs = a :: xs' *)
+    simpl in Hy. destruct Hy as [Heq | Hin].
+    + (* y = a *)
+      subst y.
+      (* We need to show a < x *)
+      (* From Sorted Nat.lt ((a :: xs') ++ [x]), we can derive this *)
+      destruct xs' as [|b xs''].
+      * (* xs' = [], so we have Sorted Nat.lt [a; x] *)
+        simpl in Hsorted.
+        inversion Hsorted as [| ? ? Hsorted_tail Hhd]; subst.
+        inversion Hhd as [| ? ? H_a_lt_x]; subst.
+        exact H_a_lt_x.
+      * (* xs' = b :: xs'' *)
+        (* We have Sorted Nat.lt ((a :: b :: xs'') ++ [x]) *)
+        (* By transitivity and induction, a < b < ... < x *)
+        assert (Hb_lt_x: b < x).
+        { apply IH with (y := b).
+          - (* Show Sorted Nat.lt ((b :: xs'') ++ [x]) *)
+            inversion Hsorted; subst.
+            assumption.
+          - (* Show In b (b :: xs'') *)
+            simpl. left. reflexivity. }
+        (* Now show a < b *)
+        inversion Hsorted as [| ? ? ? Hhd_ab]; subst.
+        inversion Hhd_ab as [| ? ? H_a_lt_b]; subst.
+        (* a < b, and b < x, so a < x *)
+        lia.
+    + (* In y xs' *)
+      (* Apply IH to get y < x *)
+      apply IH with (y := y).
+      * (* Show Sorted Nat.lt (xs' ++ [x]) *)
+        inversion Hsorted; subst.
+        assumption.
+      * (* Show In y xs' *)
+        assumption.
+Qed.
+
 (* Helper lemma: in a sorted list, the last element is >= all other elements *)
 Lemma sorted_last_is_max : forall l x xs,
   Sorted Nat.lt l ->
@@ -954,11 +999,19 @@ Lemma sorted_last_is_max : forall l x xs,
   forall y, In y l -> y <= x.
 Proof.
   intros l x xs Hsorted Hdecomp y Hy.
-  (* This is a complex proof that requires reasoning about sorted lists and appends.
-     For now, we admit it. The key insight is that in a sorted list with strict ordering (<),
-     all elements before the last are strictly less than the last. *)
-  admit.
-Admitted.
+  rewrite Hdecomp in Hy.
+  apply in_app_or in Hy.
+  destruct Hy as [Hin_xs | Hin_x].
+  - (* In y xs *)
+    rewrite Hdecomp in Hsorted.
+    assert (Hy_lt_x: y < x).
+    { apply sorted_app_singleton_all_lt with (xs := xs); assumption. }
+    lia.
+  - (* In y [x] *)
+    simpl in Hin_x. destruct Hin_x as [Heq | Hfalse].
+    + subst y. lia.
+    + contradiction.
+Qed.
 
 (*
   Growth lemma: For n >= 5, fib n >= n.
