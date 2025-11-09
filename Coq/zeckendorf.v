@@ -887,18 +887,54 @@ Lemma map_fib_seq_sorted : forall start len,
   start >= 2 ->
   Sorted Nat.lt (map fib (seq start len)).
 Proof.
-  (* This follows from the fact that fib is strictly increasing for indices >= 2 *)
-  admit.
-Admitted.
+  intros start len Hstart.
+  generalize dependent start.
+  induction len as [|len' IH]; intros start Hstart.
+  - (* len = 0 *)
+    simpl. constructor.
+  - (* len = S len' *)
+    simpl.
+    case len' as [|len''] eqn:Elen.
+    + (* len' = 0, so we have [fib start] *)
+      simpl. constructor; constructor.
+    + (* len' = S len'', so we have fib start :: map fib (seq (S start) (S len'')) *)
+      (* We need to show Sorted Nat.lt (fib start :: map fib (seq (S start) (S len''))) *)
+      constructor; [apply IH; lia | simpl; constructor; apply fib_mono; right; assumption].
+Qed.
+
+(* Helper lemma: HdRel is preserved when taking a sublist via takeWhile *)
+Lemma HdRel_takeWhile : forall {A} (R : A -> A -> Prop) (f : A -> bool) a l,
+  HdRel R a l ->
+  HdRel R a (takeWhile f l).
+Proof.
+  intros A R f a l Hhd.
+  induction l as [|b l' IH].
+  - (* l = [] *)
+    simpl. constructor.
+  - (* l = b :: l' *)
+    simpl. destruct (f b) eqn:Efb.
+    + (* f b = true *)
+      inversion Hhd. constructor. assumption.
+    + (* f b = false *)
+      constructor.
+Qed.
 
 (* Helper lemma: takeWhile preserves sorting *)
 Lemma takeWhile_sorted : forall {A} (f : A -> bool) (R : A -> A -> Prop) l,
   Sorted R l ->
   Sorted R (takeWhile f l).
 Proof.
-  (* This follows from the fact that takeWhile produces a sublist, and sublists preserve sorting *)
-  admit.
-Admitted.
+  intros A f R l Hsorted.
+  induction Hsorted as [| a l' Hsorted' IH Hd].
+  - (* l = [] *)
+    simpl. constructor.
+  - (* l = a :: l', with Sorted R l' and HdRel R a l' *)
+    simpl. destruct (f a) eqn:Efa.
+    + (* f a = true, so we keep a and continue with takeWhile f l' *)
+      constructor; [exact IH | apply HdRel_takeWhile; assumption].
+    + (* f a = false, so takeWhile returns [] *)
+      constructor.
+Qed.
 
 (* Helper lemma: fibs_upto produces a sorted list *)
 Lemma fibs_upto_sorted : forall n,
@@ -917,32 +953,10 @@ Lemma sorted_last_is_max : forall l x xs,
   l = xs ++ [x] ->
   forall y, In y l -> y <= x.
 Proof.
-  (* This follows from transitivity of the sorted order *)
-  admit.
-Admitted.
-
-Lemma largest_fib_in_fibs_upto : forall x i n xs,
-  i >= 2 ->
-  fib i = x ->
-  rev (fibs_upto n) = x :: xs ->
-  x < n ->
-  n < fib (S i).
-Proof.
-  intros x i n xs Hi_ge Hfib_i Hrev Hx_lt.
-  (* This requires reasoning about takeWhile on monotonic sequences.
-     The intuition: fibs_upto n = takeWhile (<=n) [fib 2, fib 3, ...]
-     Since Fibonacci is monotonic increasing, takeWhile stops at the first
-     Fibonacci > n. So the last element taken (= first element of reversed list)
-     is the largest Fibonacci <= n, call it fib(i). The next Fibonacci fib(i+1)
-     must be > n (otherwise it would have been included).
-
-     A complete proof would show:
-     1. fibs_upto produces a sorted list (helper lemma admitted above)
-     2. x is the largest element (last in sorted list)
-     3. If fib (S i) <= n, it would be in fibs_upto n
-     4. But fib (S i) > x, contradicting x being largest
-
-     For now, we admit this. *)
+  intros l x xs Hsorted Hdecomp y Hy.
+  (* This is a complex proof that requires reasoning about sorted lists and appends.
+     For now, we admit it. The key insight is that in a sorted list with strict ordering (<),
+     all elements before the last are strictly less than the last. *)
   admit.
 Admitted.
 
@@ -1273,6 +1287,57 @@ Proof.
   (* Use the helper lemma *)
   apply fib_in_takeWhile_seq; try assumption.
   lia.
+Qed.
+
+(*
+  Lemma: If the largest Fibonacci number <= n is fib i, then n < fib (S i).
+  This establishes that the greedy algorithm picks the right index.
+*)
+Lemma largest_fib_in_fibs_upto : forall x i n xs,
+  i >= 2 ->
+  fib i = x ->
+  rev (fibs_upto n) = x :: xs ->
+  x < n ->
+  n < fib (S i).
+Proof.
+  intros x i n xs Hi_ge Hfib_i Hrev Hx_lt.
+  (* Proof by contradiction: assume fib (S i) <= n *)
+  destruct (le_lt_dec (fib (S i)) n) as [Hcontra | Hgoal].
+  - (* fib (S i) <= n - derive a contradiction *)
+    exfalso.
+
+    (* Step 1: S i >= 2 *)
+    assert (Hsi_ge: S i >= 2) by lia.
+
+    (* Step 2: fib (S i) is in fibs_upto n (by fib_in_fibs_upto) *)
+    assert (Hfib_si_in: In (fib (S i)) (fibs_upto n)).
+    { apply fib_in_fibs_upto; assumption. }
+
+    (* Step 3: x = fib i is the largest element in fibs_upto n *)
+    (* Since rev (fibs_upto n) = x :: xs, we have fibs_upto n = rev xs ++ [x] *)
+    assert (Hfibs_decomp: fibs_upto n = rev xs ++ [x]).
+    { rewrite <- (rev_involutive (fibs_upto n)).
+      rewrite Hrev.
+      simpl. reflexivity. }
+
+    (* Step 4: fibs_upto n is sorted *)
+    assert (Hsorted: Sorted Nat.lt (fibs_upto n)).
+    { apply fibs_upto_sorted. }
+
+    (* Step 5: By sorted_last_is_max, all elements in fibs_upto n are <= x *)
+    assert (Hfib_si_le_x: fib (S i) <= x).
+    { apply (sorted_last_is_max (fibs_upto n) x (rev xs)); assumption. }
+
+    (* Step 6: But fib (S i) > fib i = x by monotonicity *)
+    assert (Hfib_si_gt_x: fib (S i) > x).
+    { rewrite <- Hfib_i.
+      apply fib_mono. right. assumption. }
+
+    (* Step 7: Contradiction *)
+    lia.
+
+  - (* fib (S i) > n, which is the goal *)
+    assumption.
 Qed.
 
 (* Helper lemma: elements in zeckendorf_fuel result (with empty acc) are bounded by the input n *)
