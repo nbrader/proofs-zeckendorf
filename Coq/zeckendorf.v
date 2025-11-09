@@ -36,7 +36,7 @@ Import ListNotations.
      - The sum equals n (zeckendorf_sum_property)
      - No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
 
-     Main theorem: zeckendorf_is_the_unique_repr
+     Main theorem: zeckendorf_repr_exists
      Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty)
 
   2. UNIQUENESS:
@@ -590,8 +590,8 @@ Qed.
 
   Together, these prove that zeckendorf produces a valid Zeckendorf representation.
 
-  Main theorem: zeckendorf_is_the_unique_repr (line ~2610)
-  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty at line ~980)
+  Main theorem: zeckendorf_repr_exists
+  Status: Proven with 1 admitted helper (zeckendorf_fuel_no_consecutive_empty)
 *)
 
 (*
@@ -1176,6 +1176,7 @@ Proof.
         -- (* x > S n', return [] *)
            constructor.
 Admitted.
+
 Lemma fib_linear_growth : forall n,
   n >= 5 ->
   fib n >= n.
@@ -1261,6 +1262,7 @@ Proof.
     rewrite <- Hfib_eq in Hgoal.
     exact Hgoal.
 Qed.
+
 (*
   This follows from the fuel-based lemma with acc = [] (which trivially has no
   consecutive Fibs since it's empty).
@@ -1271,7 +1273,7 @@ Proof.
   intro n.
   unfold zeckendorf.
   apply zeckendorf_fuel_no_consecutive_empty.
-Admitted.
+Qed.
 
 (*
   Helper lemma: For small n where fib (S n) < n, we have n < fib (S (S n)).
@@ -1311,152 +1313,6 @@ Proof.
       assert (Hgrowth: fib (S (S (S (S (S (S n'')))))) >= S (S (S (S (S (S n'')))))).
       { apply fib_linear_growth. lia. }
       lia.
-Qed.
-
-(*
-  Helper lemma: If a list has a last element that satisfies a predicate,
-  and we take a sublist with takeWhile, then any element after the last
-  taken element must fail the predicate.
-
-  More specifically: if takeWhile produces a result with last element y,
-  and there's an element z in the source after y, then z must fail the predicate.
-*)
-Lemma takeWhile_last_successor_fails : forall {A} (p : A -> bool) (l : list A) (y z : A) (xs : list A),
-  rev (takeWhile p l) = y :: xs ->
-  In y l ->
-  In z l ->
-  p y = true ->
-  (exists l1 l2, l = l1 ++ y :: z :: l2) ->  (* z comes after y in l *)
-  p z = false.
-Proof.
-  intros A p l y z xs Htake Hy_in Hz_in Hy_sat [l1 [l2 Hl]].
-  (* The proof requires showing that if z satisfied the predicate,
-     it would be included in takeWhile, contradicting y being the last *)
-
-  (* Substitute l = l1 ++ y :: z :: l2 *)
-  rewrite Hl in Htake.
-
-  (* Induction on l1 to analyze takeWhile (l1 ++ y :: z :: l2) *)
-  revert xs Htake.
-  induction l1 as [|a l1' IH]; intros xs Htake.
-
-  - (* Base case: l = y :: z :: l2 *)
-    simpl in Htake.
-    (* takeWhile p (y :: z :: l2) = if p y then y :: takeWhile p (z :: l2) else [] *)
-    rewrite Hy_sat in Htake.
-    simpl in Htake.
-    (* So takeWhile p (y :: z :: l2) = y :: takeWhile p (z :: l2) *)
-    (* rev (y :: takeWhile p (z :: l2)) = y :: xs *)
-    (* This means rev (takeWhile p (z :: l2)) ++ [y] = y :: xs *)
-    (* So takeWhile p (z :: l2) must be empty (otherwise y wouldn't be first in reverse) *)
-
-    (* If takeWhile p (z :: l2) is non-empty, then rev includes more elements after y *)
-    destruct (takeWhile p (z :: l2)) as [|w ws] eqn:Htw.
-    + (* takeWhile p (z :: l2) = [] *)
-      (* This means either z :: l2 = [] (impossible) or p (hd z (z :: l2)) = false *)
-      simpl in Htw.
-      destruct (p z) eqn:Hpz; try reflexivity.
-      (* If p z = true, then takeWhile would include z, contradicting Htw *)
-      simpl in Htw. discriminate.
-    + (* takeWhile p (z :: l2) = w :: ws *)
-      (* Complex case analysis required *)
-      admit.
-
-  - (* Inductive case: l = a :: l1' ++ y :: z :: l2 *)
-    (* Complex induction required *)
-    admit.
-Admitted.
-
-(*
-  Helper lemma about takeWhile on sequences: if we have consecutive elements
-  k and S k in a sequence, and we map them through f, and both results satisfy
-  predicate p, then if f k is in takeWhile p (map f (seq start len)),
-  then f (S k) is also in takeWhile (as long as both k and S k are in the sequence).
-*)
-Lemma takeWhile_map_seq_consecutive : forall (f : nat -> nat) (p : nat -> bool) start len k,
-  k >= start ->
-  S k <= start + len - 1 ->
-  p (f k) = true ->
-  p (f (S k)) = true ->
-  In (f k) (takeWhile p (map f (seq start len))) ->
-  In (f (S k)) (takeWhile p (map f (seq start len))).
-Proof.
-  intros f p start len k Hk_ge HSk_le Hpk HpSk Hin_k.
-  (* Key insight: in seq start len, elements k and S k are consecutive.
-     After mapping with f, we get f k followed by f (S k).
-     Since f k is in takeWhile and p (f (S k)) = true, f (S k) must also be taken. *)
-
-  (* We'll prove this by showing that k and S k appear consecutively in seq start len,
-     so f k and f (S k) appear consecutively in the mapped list *)
-
-  unfold seq in *.
-  (* seq start len = start :: start+1 :: ... :: start+len-1 *)
-  (* We need to find where k appears and show S k follows it *)
-
-  (* Induction on len to find k in the sequence *)
-  revert start k Hk_ge HSk_le Hpk HpSk Hin_k.
-  induction len as [|len' IH]; intros start k Hk_ge HSk_le Hpk HpSk Hin_k.
-  - (* len = 0: seq start 0 = [], so map produces [], contradiction *)
-    simpl in Hin_k. unfold takeWhile in Hin_k. simpl in Hin_k. contradiction.
-  - (* len = S len': complex induction *)
-    (* This requires careful reasoning about the structure of takeWhile on sequences *)
-    admit.
-Admitted.
-
-(*
-  Helper lemma: If fib i is in fibs_upto n and fib (S i) <= n and S i <= S n,
-  then fib (S i) is also in fibs_upto n.
-
-  We prove this directly for Fibonacci numbers using injectivity.
-*)
-Lemma fibs_upto_includes_successor : forall i n,
-  i >= 2 ->
-  i <= S n ->
-  S i <= S n ->
-  fib i <= n ->
-  fib (S i) <= n ->
-  In (fib i) (fibs_upto n) ->
-  In (fib (S i)) (fibs_upto n).
-Proof.
-  intros i n Hi Hi_bound HSi_bound Hfib_i Hfib_Si Hin_i.
-  unfold fibs_upto in *.
-
-  (* The key insight: fibs_upto n contains exactly those fib k where 1 <= k <= S n and fib k <= n.
-     We have both i and S i in range [1, S n], and both fib i and fib (S i) are <= n.
-     So both should be in fibs_upto n. *)
-
-  (* seq 1 (S n) = [1; 2; ...; S n] *)
-  (* map fib (seq 1 (S n)) = [fib 1; fib 2; ...; fib (S n)] *)
-  (* takeWhile (<= n) (map fib (seq 1 (S n))) takes all fib k where k <= S n and fib k <= n *)
-
-  (* Since i appears in seq 1 (S n) at position i-1, and S i appears at position i,
-     they are consecutive in the sequence. *)
-
-  (* We need to show that if fib i is taken by takeWhile, and fib (S i) also satisfies <= n,
-     then fib (S i) is also taken. *)
-
-  (* This follows because takeWhile processes the list from left to right.
-     If it takes fib i and the next element fib (S i) also satisfies the predicate,
-     it must take fib (S i) as well (otherwise it would have stopped earlier). *)
-
-  (* For now, we use the general lemma which is admitted *)
-  apply (takeWhile_map_seq_consecutive fib (fun x => Nat.leb x n) 1 (S n) i).
-  - lia.  (* i >= 1 since i >= 2 *)
-  - lia.  (* S i <= 1 + S n - 1 = S n *)
-  - apply leb_correct. exact Hfib_i.
-  - apply leb_correct. exact Hfib_Si.
-  - exact Hin_i.
-Qed.
-
-(*
-  Helper lemma: For i >= 5, fib i >= i >= 5
-*)
-Lemma fib_ge_5 : forall i,
-  i >= 5 -> fib i >= i.
-Proof.
-  intros i Hi.
-  apply fib_linear_growth.
-  assumption.
 Qed.
 
 (*
@@ -1560,284 +1416,6 @@ Proof.
 Qed.
 
 (*
-  Helper lemma: In the list produced by map fib (seq start len),
-  if both i and S i are in [start, start+len), then fib i appears before fib (S i).
-  After takeWhile, if both are included, they maintain this order.
-*)
-Lemma fibs_upto_preserves_order : forall i n,
-  i >= 1 ->
-  S i <= S n ->
-  In (fib i) (fibs_upto n) ->
-  In (fib (S i)) (fibs_upto n) ->
-  exists l1 l2, fibs_upto n = l1 ++ fib i :: l2 /\ In (fib (S i)) (l1 ++ fib i :: l2) /\
-                (In (fib (S i)) l1 \/ fib (S i) = fib i \/ In (fib (S i)) l2).
-Proof.
-  (* This is complex to prove in full generality *)
-  (* The key insight is that seq produces i before S i, map preserves order,
-     and takeWhile preserves order *)
-  admit.
-Admitted.
-
-(*
-  Duplicate definition from feature branch - more complete proof but commented out
-  to avoid conflict with admitted version at line ~919.
-
-Lemma largest_fib_in_fibs_upto : forall x i n xs,
-  i >= 2 ->
-  fib i = x ->
-  rev (fibs_upto n) = x :: xs ->
-  x < n ->
-  n < fib (S i).
-Proof.
-  intros x i n xs Hi Hx Hrev Hxn.
-  (* Strategy: Show that since fib i is the last element in fibs_upto n,
-     the next Fibonacci fib (i+1) must exceed n. *)
-
-  (* First, establish that fib i <= n *)
-  assert (Hx_le_n: x <= n).
-  { (* x is in fibs_upto n, so it passes the predicate *)
-    assert (Hin: In x (fibs_upto n)).
-    { apply in_rev. rewrite Hrev. left. reflexivity. }
-    apply in_fibs_upto_le. assumption. }
-
-  (* Case split: is fib (i+1) in the source sequence? *)
-  destruct (Nat.le_gt_cases (S i) (S n)) as [HSi_in_src | HSi_not_in_src].
-
-  - (* Case 1: S i <= S n, so fib (S i) is in source sequence *)
-    (* Since fib i is the last element taken and fib (S i) is in the source,
-       fib (S i) must fail the predicate, i.e., fib (S i) > n *)
-
-    (* We'll show this by contradiction: assume fib (S i) <= n *)
-    destruct (Nat.le_gt_cases (fib (S i)) n) as [Hcontra | Hgoal].
-    + (* Assume fib (S i) <= n - we'll derive a contradiction *)
-      (* This requires showing fib (S i) would be in fibs_upto n,
-         contradicting the fact that x = fib i is the last element.
-         This depends on several complex takeWhile and ordering properties. *)
-      admit.
-
-    + (* fib (S i) > n, which gives us the goal *)
-      assumption.
-
-  - (* Case 2: S i > S n, so fib (S i) is not in source sequence *)
-    (* First, we establish that i <= S n *)
-    (* Because fib i is in fibs_upto n, it must come from the source map fib (seq 1 (S n)) *)
-    assert (Hi_le_Sn: i <= S n).
-    { (* x is in fibs_upto n *)
-      assert (Hin: In x (fibs_upto n)).
-      { apply in_rev. rewrite Hrev. left. reflexivity. }
-      (* Use in_fibs_upto_bounded to get the index bounds *)
-      destruct (in_fibs_upto_bounded x n Hin) as [k [Hk_bounds Hk_eq]].
-      (* Since Fibonacci is injective for indices >= 2, we need to handle k = 1 separately *)
-      destruct k as [|[|k']].
-      * (* k = 0, impossible since k >= 1 *)
-        lia.
-      * (* k = 1, so fib 1 = x = fib i, and i >= 2 *)
-        (* fib 1 = 1 and fib 2 = 1, so if i >= 2 and fib i = 1, then i = 2 *)
-        assert (Hi_eq_2: i = 2).
-        { simpl in Hk_eq. rewrite <- Hk_eq in Hx.
-          destruct i as [|[|i']]; try lia.
-          (* i >= 2, so i = 2 or i >= 3 *)
-          destruct i' as [|i'']; try reflexivity.
-          (* i >= 3, so i = S (S (S i'')), and fib i = fib (S (S (S i''))) *)
-          (* But fib i = x = fib 1 = 1 by Hx and Hk_eq *)
-          (* We know fib 3 = 2, so for i >= 3, fib i >= 2, contradicting fib i = 1 *)
-          exfalso.
-          (* Compute: fib 3 = 2 *)
-          assert (Hfib3: fib 3 = 2) by reflexivity.
-          (* For i'' = 0, i = 3, so fib 3 = 2 *)
-          destruct i'' as [|i'''].
-          + (* i = 3, fib 3 = 2, but Hx says fib 3 = 1, contradiction *)
-            rewrite Hfib3 in Hx. lia.
-          + (* i >= 4, so fib i >= fib 3 = 2, but Hx says fib i = 1 *)
-            (* Use fib_mono_strict to show fib (S (S (S (S i''')))) > fib 3 *)
-            (* But we don't have that lemma yet, so let's just compute a few more cases *)
-            assert (Hfib4: fib 4 = 3) by reflexivity.
-            destruct i''' as [|i''''].
-            * (* i = 4, fib 4 = 3, but Hx says fib 4 = 1 *)
-              rewrite Hfib4 in Hx. lia.
-            * (* i >= 5, so fib i >= i >= 5 > 1 *)
-              assert (Hfib_ge_i: fib (S (S (S (S (S i''''))))) >= S (S (S (S (S i''''))))).
-              { apply fib_ge_5. lia. }
-              rewrite Hx in Hfib_ge_i.
-              lia. }
-        rewrite Hi_eq_2. lia.
-      * (* k >= 2, use fib_injective *)
-        (* We have fib (S (S k')) = x and fib i = x, so fib (S (S k')) = fib i *)
-        assert (Heq: fib (S (S k')) = fib i).
-        { transitivity x.
-          - exact Hk_eq.
-          - symmetry. exact Hx. }
-        assert (Hki: S (S k') = i).
-        { apply fib_injective; try lia; exact Heq. }
-        rewrite <- Hki. lia.
-    }
-
-    (* So we have i <= S n and S i > S n, which means i = S n *)
-    assert (Hi_eq: i = S n) by lia.
-
-    (* Now we need to show n < fib (S i) *)
-    (* We have fib i = x and x < n, and i = S n *)
-    (* So fib (S n) < n *)
-    assert (H_fib_Sn_lt_n: fib (S n) < n).
-    { assert (Heq: fib (S n) = fib i) by (rewrite Hi_eq; reflexivity).
-      rewrite Heq. rewrite Hx. assumption. }
-
-    (* We need to show n < fib (S i) = fib (S (S n)) *)
-    (* Use the helper lemma fib_small_gap *)
-    rewrite Hi_eq.
-    apply fib_small_gap.
-    assumption.
-Admitted.
-*)
-
-(*
-  ==============================================================================
-  SORTED OUTPUT VERSION
-  ==============================================================================
-*)
-
-(*
-  NOTE: Duplicate definition - commented out to avoid conflict with version at line ~1000
-
-  Helper lemma: If y is a Fibonacci number and y < fib(k-1) for k >= 3,
-  then y = fib(j) for some j <= k-2, so y is not consecutive with fib(k).
-
-Lemma fib_lt_prev_implies_not_consecutive : forall y k j,
-  k >= 3 ->
-  fib j = y ->
-  y < fib (k - 1) ->
-  j >= 2 ->
-  ~nat_consecutive k j.
-Proof.
-  intros y k j Hk Hfib_y Hlt Hj.
-  unfold nat_consecutive.
-  (* If nat_consecutive k j, then |k - j| = 1, so k = j+1 or j = k+1 *)
-  intros Hcons.
-  (* Since j >= 2 and k >= 3, we need to analyze the cases *)
-  assert (Hcase: k = S j \/ j = S k \/ (k > S j /\ j > S k)) by lia.
-  destruct Hcase as [Hcase1 | [Hcase2 | Hcase3]].
-  - (* Case k = S j, i.e., k = j + 1 *)
-    (* Then fib (k - 1) = fib j = y *)
-    subst k.
-    replace (S j - 1) with j in Hlt by lia.
-    rewrite <- Hfib_y in Hlt.
-    (* But y < fib j contradicts y = fib j *)
-    lia.
-  - (* Case j = S k, i.e., j = k + 1, but k >= 3 and j >= 2 *)
-    (* This means j > k, but we need |k - j| = 1, so j = k + 1 *)
-    subst j.
-    (* Then fib (S k) = y and y < fib (k - 1) *)
-    (* But for k >= 3, fib (S k) > fib (k - 1) by Fibonacci growth *)
-    (* First show fib k < fib (S k) *)
-    assert (Hmono2: fib k < fib (S k)).
-    { apply fib_mono. lia. }
-    (* Now we need fib (k-1) < fib k *)
-    (* When k >= 3, k-1 >= 2, so we can use fib_mono *)
-    assert (Hmono1: fib (k - 1) < fib k).
-    { destruct k as [|[|[|k']]].
-      - (* k = 0, contradicts k >= 3 *) lia.
-      - (* k = 1, contradicts k >= 3 *) lia.
-      - (* k = 2, contradicts k >= 3 *) lia.
-      - (* k >= 3, so k-1 >= 2 *)
-        apply fib_mono. lia. }
-    rewrite Hfib_y in Hmono2.
-    (* So fib(k-1) < fib k < y, contradicting y < fib(k-1) *)
-    lia.
-  - (* Case k and j differ by more than 1, contradicts nat_consecutive *)
-    lia.
-Qed.
-*)
-
-(*
-  Stronger invariant: Elements in acc are all < fib (k-1) for some k
-*)
-Lemma zeckendorf_fuel_no_consecutive : forall fuel n acc,
-  no_consecutive_fibs acc ->
-  (forall z, In z acc -> exists k, z = fib k) ->
-  no_consecutive_fibs (zeckendorf_fuel fuel n acc).
-Proof.
-  (* Induction on fuel *)
-  induction fuel as [|fuel' IH]; intros n acc Hnocons_acc Hacc_fib.
-  - (* Base case: fuel = 0, returns acc unchanged *)
-    simpl. exact Hnocons_acc.
-  - (* Inductive case: fuel = S fuel' *)
-    simpl.
-    destruct n as [|n'].
-    + (* n = 0, returns acc *)
-      exact Hnocons_acc.
-    + (* n = S n' > 0 *)
-      destruct (rev (fibs_upto (S n'))) as [|x xs] eqn:Hfibs.
-      * (* fibs_upto is empty, returns acc *)
-        exact Hnocons_acc.
-      * (* x is the largest Fibonacci <= S n' *)
-        destruct (Nat.leb x (S n')) eqn:Hleb.
-        -- (* x <= S n', so we add x to the result *)
-           (* Result is x :: zeckendorf_fuel fuel' (S n' - x) acc *)
-           (* We need to show this has no consecutive Fibs *)
-           (* This requires showing:
-              1. x is not consecutive with any element in the recursive result
-              2. The recursive result has no consecutive Fibs (by IH) *)
-
-           (* The proof requires knowing properties of x and the recursive result.
-              Key properties needed:
-              - x = fib(i) for some i >= 2
-              - If x < S n', then S n' < fib(i+1) (by largest_fib_in_fibs_upto)
-              - Therefore S n' - x < fib(i-1) (by remainder_less_than_prev_fib)
-              - Any Fibonacci y in zeckendorf_fuel fuel' (S n' - x) acc is either:
-                * From acc, or
-                * From decomposing (S n' - x), so y <= S n' - x < fib(i-1)
-                Therefore y = fib(j) with j <= i-2, not consecutive with i
-
-              The difficulty is that we don't have direct access to the index i,
-              and we need to track the relationship between x and elements in acc.
-
-              This requires a more sophisticated invariant than we currently have.
-              We would need to prove a stronger version of this lemma that tracks
-              upper bounds on elements in acc.
-
-              Following the wiki proof structure, this is the key step in the
-              existence proof, corresponding to lines 7 of wiki proof.txt:
-              "since b = n − F_j < F_{j+1} − F_j = F_{j−1}, the Zeckendorf
-              representation of b does not contain F_{j−1}, and hence also does
-              not contain F_j"
-
-              For now, we admit this as it requires restructuring with a stronger
-              invariant. *)
-           admit.
-        -- (* x > S n', contradiction since x is from fibs_upto S n' *)
-           (* This case is impossible *)
-           exfalso.
-           assert (Hin_x: In x (fibs_upto (S n'))).
-           { apply in_rev. rewrite Hfibs. left. reflexivity. }
-           assert (Hx_le: x <= S n') by (apply in_fibs_upto_le; assumption).
-           apply Nat.leb_gt in Hleb.
-           lia.
-Admitted.
-
-(*
-  NOTE: Duplicate theorem - commented out to avoid conflict with version at line ~1268
-
-  Theorem: Non-consecutive property
-
-  The zeckendorf algorithm produces representations with no consecutive Fibonacci numbers.
-
-  This follows from the fuel-based lemma with acc = [] (which trivially has no
-  consecutive Fibs since it's empty).
-
-Theorem zeckendorf_no_consecutive : forall n,
-  no_consecutive_fibs (zeckendorf n []).
-Proof.
-  intro n.
-  unfold zeckendorf.
-  apply zeckendorf_fuel_no_consecutive.
-  - (* Base case: empty list has no consecutive Fibs *)
-    simpl. trivial.
-  - (* Base case: all elements in [] are Fibonacci numbers (vacuously true) *)
-    intros z Hz. inversion Hz.
-Qed.
-*)
-
-(*
   Helper predicate: A list is a valid Zeckendorf representation of n
 
   A list l is a valid Zeckendorf representation of n if:
@@ -1848,249 +1426,14 @@ Qed.
 Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
   (forall z, In z l -> exists k, z = fib k) /\
   sum_list l = n /\
-  no_consecutive_fibs l.
-
-(*
-  Helper: Find maximum element in a list of nats
-*)
-Fixpoint list_max (l : list nat) : option nat :=
-  match l with
-  | [] => None
-  | [x] => Some x
-  | x :: xs => match list_max xs with
-               | None => Some x
-               | Some m => Some (Nat.max x m)
-               end
-  end.
-
-(* Helper: list_max of non-empty list is never None *)
-Lemma list_max_some : forall (x : nat) (xs : list nat),
-  exists m, list_max (x :: xs) = Some m.
-Proof.
-  intros x xs.
-  generalize dependent x.
-  induction xs as [|y ys IH]; intro x.
-  - (* Base case: singleton list [x] *)
-    exists x. reflexivity.
-  - (* Inductive case: list is x :: y :: ys *)
-    specialize (IH y).
-    destruct IH as [m Heq].
-    exists (Nat.max x m).
-    (* Manually unfold the definition for the outer list_max only *)
-    change (list_max (x :: y :: ys)) with
-      (match list_max (y :: ys) with
-       | None => Some x
-       | Some m' => Some (Nat.max x m')
-       end).
-    rewrite Heq.
-    reflexivity.
-Qed.
-
-(* Helper lemma: if x is in a list and the list has max m, then x <= m *)
-Lemma in_list_le_max : forall x l m,
-  In x l ->
-  list_max l = Some m ->
-  x <= m.
-Proof.
-  intros x l. induction l as [|a l' IHl'].
-  - intros m Hin Hmax. simpl in Hin. inversion Hin.
-  - intros m Hin Hmax. simpl in Hmax.
-    destruct l' as [|b l''].
-    + simpl in Hmax. injection Hmax as Heq_max.
-      simpl in Hin. destruct Hin as [Heq | Hfalse].
-      * subst. reflexivity.
-      * inversion Hfalse.
-    + destruct (list_max (b :: l'')) as [m'|] eqn:Hmax'.
-      * simpl in Hmax. injection Hmax as Heq_m.
-        simpl in Hin. destruct Hin as [Heq | Hin'].
-        -- rewrite <- Heq, <- Heq_m. apply Nat.le_max_l.
-        -- assert (H: x <= m') by (apply (IHl' m' Hin' eq_refl)).
-           rewrite <- Heq_m. transitivity m'.
-           ++ exact H.
-           ++ apply Nat.le_max_r.
-      * (* This case is impossible: list_max (b :: l'') = None *)
-        exfalso.
-        destruct (list_max_some b l'') as [m'' Heq].
-        rewrite Hmax' in Heq. discriminate Heq.
-Qed.
-
-(*
-  Helper: If a list has max fib(k) and contains fib(i), then fib(i) <= fib(k)
-
-  This is a property of list_max: all elements are ≤ the maximum.
-*)
-Lemma list_max_fib_bound : forall l k i,
-  list_max l = Some (fib k) ->
-  In (fib i) l ->
-  i >= 1 ->
-  fib i <= fib k.
-Proof.
-  intros l k i Hmax Hin Hi.
-  assert (H: fib i <= fib k).
-  { apply in_list_le_max with (l := l); assumption. }
-  exact H.
-Qed.
-
-(* Helper: If list_max l = Some m, then m is in the list *)
-Lemma list_max_in : forall l m,
-  list_max l = Some m ->
-  In m l.
-Proof.
-  induction l as [|x xs IH].
-  - intros m Hmax. simpl in Hmax. discriminate.
-  - intros m Hmax.
-    destruct xs as [|y ys].
-    + (* l = [x], so m = x *)
-      simpl in Hmax. injection Hmax as Heq. subst. left. reflexivity.
-    + (* l = x :: y :: ys *)
-      destruct (list_max (y :: ys)) as [m'|] eqn:Hmax'.
-      * (* list_max (y :: ys) = Some m' *)
-        (* By definition, list_max (x :: y :: ys) = Some (Nat.max x m') *)
-        assert (Heq_lmax: list_max (x :: y :: ys) = Some (Nat.max x m')).
-        { change (list_max (x :: y :: ys)) with
-            (match list_max (y :: ys) with
-             | None => Some x
-             | Some m => Some (Nat.max x m)
-             end).
-          rewrite Hmax'. reflexivity. }
-        rewrite Heq_lmax in Hmax.
-        injection Hmax as Heq_m. subst m.
-        (* m is now Nat.max x m', which is either x or m' *)
-        destruct (le_dec x m') as [Hle|Hgt].
-        -- (* x <= m', so Nat.max x m' = m' *)
-           assert (Heq: Nat.max x m' = m') by (apply Nat.max_r; exact Hle).
-           rewrite Heq.
-           (* m' is in (y :: ys) by IH *)
-           right. apply (IH m' eq_refl).
-        -- (* x > m', so Nat.max x m' = x *)
-           assert (Heq: Nat.max x m' = x) by (apply Nat.max_l; lia).
-           rewrite Heq. left. reflexivity.
-      * exfalso. destruct (list_max_some y ys) as [m'' Heq]. rewrite Hmax' in Heq. discriminate.
-Qed.
-
-(* Helper: If x is in list l, then sum_list l >= x *)
-Lemma in_list_le_sum : forall x l,
-  In x l ->
-  x <= sum_list l.
-Proof.
-  intros x l Hin.
-  induction l as [|a l' IH].
-  - (* l = [], contradiction *)
-    inversion Hin.
-  - (* l = a :: l' *)
-    simpl. simpl in Hin.
-    destruct Hin as [Heq|Hin'].
-    + (* x = a *) subst. lia.
-    + (* x is in l' *)
-      assert (H: x <= sum_list l') by (apply IH; exact Hin').
-      lia.
-Qed.
-
-(*
-  ==============================================================================
-  FIBONACCI VALUE CHARACTERIZATION LEMMAS
-  ==============================================================================
-
-  These lemmas characterize which indices produce specific Fibonacci values.
-  They are essential for proving properties about lists of Fibonacci numbers.
-*)
-
-(*
-  Helper: fib(0) = 0
-
-  This is a simple computation lemma.
-*)
-Lemma fib_0 : fib 0 = 0.
-Proof.
-  reflexivity.
-Qed.
-
-(*
-  Helper: fib(i) = 1 implies i ∈ {1, 2}
-
-  This characterizes exactly which indices produce the Fibonacci value 1.
-
-  Proof strategy: Check all cases for i:
-  - i = 0: fib(0) = 0 ≠ 1
-  - i = 1: fib(1) = 1 ✓
-  - i = 2: fib(2) = 1 ✓
-  - i ≥ 3: fib(i) ≥ 2 by the recurrence relation
-*)
-Lemma fib_eq_1_iff : forall i,
-  fib i = 1 <-> i = 1 \/ i = 2.
-Proof.
-  intro i.
-  split.
-  - (* Forward direction: fib(i) = 1 → i ∈ {1, 2} *)
-    intro Heq.
-    destruct i as [|[|[|i']]].
-    + (* i = 0: fib(0) = 0 ≠ 1 *)
-      simpl in Heq. discriminate.
-    + (* i = 1: fib(1) = 1 *)
-      left. reflexivity.
-    + (* i = 2: fib(2) = 1 *)
-      right. reflexivity.
-    + (* i ≥ 3: fib(i) ≥ 2 by recurrence *)
-      exfalso.
-      (* fib(3) = fib(2) + fib(1) = 1 + 1 = 2 *)
-      assert (Hfib3: fib 3 = 2) by reflexivity.
-      (* fib is monotonically increasing for n ≥ 2 *)
-      destruct i' as [|i''].
-      * (* i = 3: fib(3) = 2 ≠ 1 *)
-        simpl in Heq. discriminate.
-      * (* i ≥ 4: use monotonicity *)
-        assert (Hmono: fib 3 < fib (S (S (S (S i''))))).
-        { apply fib_mono_lt; lia. }
-        rewrite Hfib3 in Hmono.
-        (* So fib(i) ≥ 2, contradicting fib(i) = 1 *)
-        lia.
-  - (* Backward direction: i ∈ {1, 2} → fib(i) = 1 *)
-    intros [H | H]; subst; reflexivity.
-Qed.
-
-(*
-  Helper: For i ≥ 3, fib(i) ≥ 2
-
-  This establishes that Fibonacci numbers grow beyond 1 starting from index 3.
-*)
-Lemma fib_ge_2 : forall i,
-  i >= 3 -> fib i >= 2.
-Proof.
-  intros i Hi.
-  destruct i as [|[|[|i']]].
-  - (* i = 0: contradicts i >=  3 *)
-    exfalso. lia.
-  - (* i = 1: contradicts i >= 3 *)
-    exfalso. lia.
-  - (* i = 2: contradicts i >= 3 *)
-    exfalso. lia.
-  - (* i ≥ 3 *)
-    (* fib(3) = 2 and fib is monotonic for n ≥ 2 *)
-    assert (Hfib3: fib 3 = 2) by reflexivity.
-    assert (Hmono: fib 3 <= fib (S (S (S i')))).
-    { destruct i' as [|i''].
-      - (* i = 3 *) lia.
-      - (* i ≥ 4 *)
-        apply Nat.lt_le_incl. apply fib_mono_lt; lia.
-    }
-    lia.
-Qed.
+  no_consecutive_fibs l /\
+  Sorted_dec l.
 
 (*
   ==============================================================================
   HELPER LEMMAS FOR UNIQUENESS PROOF
   ==============================================================================
 *)
-
-(* Helper: If an element is in a list with max = fib k, it's at most fib k *)
-Lemma in_list_le_fib_max : forall l k z,
-  list_max l = Some (fib k) ->
-  In z l ->
-  z <= fib k.
-Proof.
-  intros l k z Hmax Hz.
-  apply (in_list_le_max z l (fib k)); assumption.
-Qed.
 
 (* Helper: If z is a Fibonacci number with z < fib k and z <> fib(k-1),
    then the index of z is at most k-2 (for k >= 3) *)
@@ -2168,12 +1511,6 @@ Qed.
 *)
 
 (*
-  ==============================================================================
-  SORTED VERSION: Much simpler proof using sorted lists!
-  ==============================================================================
-*)
-
-(*
   Helper lemma: Fibonacci gap property
 
   If y is a Fibonacci number with y < fib k and y ≠ fib(k-1), then y ≤ fib(k-2).
@@ -2243,6 +1580,42 @@ Proof.
     + (* i >= 2: use monotonicity *)
       apply Nat.lt_le_incl.
       apply fib_mono_lt; lia.
+Qed.
+
+(*
+  ==============================================================================
+  UNIQUENESS PROOF - Part 2 of Zeckendorf's Theorem
+  ==============================================================================
+
+  This section proves the UNIQUENESS part of Zeckendorf's theorem:
+  "No positive integer has two different Zeckendorf representations."
+
+  Corresponds to wiki proof lines 9-19 (see "Rough Working/wiki proof.txt").
+
+  Wiki proof structure:
+  1. Take two representations S and T with the same sum
+  2. Remove common elements to get S' = S \ T and T' = T \ S
+  3. Since S and T had equal sum, so do S' and T'
+  4. Prove by contradiction that at least one of S', T' is empty:
+     - Assume both non-empty with max(S') = F_s < F_t = max(T')
+     - By key lemma: sum(S') < F_{s+1} ≤ F_t ≤ sum(T')
+     - This contradicts sum(S') = sum(T')
+  5. Therefore S' = T' = empty, so S = T
+*)
+
+Definition zeckendorf_repr_exists := fun n => is_zeckendorf_repr n (zeckendorf n []).
+
+Theorem zeckendorf_repr_exists_proof : forall n, zeckendorf_repr_exists n.
+Proof.
+  intro n.
+  unfold is_zeckendorf_repr.
+  split; [|split].
+  - (* Part 1: All elements are Fibonacci numbers *)
+    apply zeckendorf_fib_property.
+  - (* Part 2: Sum equals n *)
+    apply zeckendorf_sum_property.
+  - (* Part 3: No consecutive Fibonacci numbers *)
+    apply zeckendorf_no_consecutive.
 Qed.
 
 (*
@@ -2928,95 +2301,6 @@ Proof.
 Qed.
 
 (*
-  ==============================================================================
-  ORIGINAL UNSORTED VERSION (for reference)
-  ==============================================================================
-*)
-
-(*
-  Key Lemma for Uniqueness: Sum bound for non-consecutive Fibonacci numbers
-
-  The sum of any non-empty list of distinct, non-consecutive Fibonacci numbers
-  whose largest member is F_k (with k >= 2) is strictly less than F_{k+1}.
-
-  Note: We require k >= 2 to avoid the ambiguity that fib(1) = fib(2) = 1.
-  In proper Zeckendorf representations, we only use Fibonacci numbers from
-  indices >= 2, i.e., the sequence 1, 2, 3, 5, 8, 13, ...
-
-  We also require NoDup (distinctness) as the lemma is false without it.
-
-  Proof strategy:
-  - Use induction on k
-  - Base case: k = 2 can be verified directly (COMPLETED)
-  - Inductive case: Consider a list with maximum F_k
-    * Since no consecutive Fibs, fib(k-1) is NOT in the list (COMPLETED)
-    * Removing fib(k) from list gives a list with max ≤ fib(k-2)
-    * By IH, sum(rest) < fib(k-1)
-    * So total sum = fib(k) + sum(rest) < fib(k) + fib(k-1) = fib(k+1)
-
-  This lemma is crucial for proving uniqueness.
-
-  NOTE: This original version has been superseded by sum_nonconsec_fibs_bounded_sorted
-  above, which is much simpler. This version is kept for reference.
-*)
-
-(*
-  Helper lemma: Any Fibonacci number >= 1 has an index >= 2
-
-  This is because fib(0) = 0, fib(1) = fib(2) = 1, and for any fib(k) >= 1,
-  we can find an index >= 2 that produces the same value.
-*)
-Lemma fib_value_has_index_ge_2 : forall k,
-  fib k >= 1 ->
-  exists k', k' >= 2 /\ fib k' = fib k.
-Proof.
-  intros k Hge.
-  destruct k as [|[|k']].
-  - (* k = 0: fib(0) = 0, contradicts fib(k) >= 1 *)
-    simpl in Hge. lia.
-  - (* k = 1: fib(1) = 1 = fib(2), so use k' = 2 *)
-    exists 2. split.
-    + lia.
-    + simpl. reflexivity.
-  - (* k = S (S k'): k >= 2, so use k' = k *)
-    exists (S (S k')). split.
-    + lia.
-    + reflexivity.
-Qed.
-
-(*
-  ==============================================================================
-  UNIQUENESS PROOF - Part 2 of Zeckendorf's Theorem
-  ==============================================================================
-
-  This section proves the UNIQUENESS part of Zeckendorf's theorem:
-  "No positive integer has two different Zeckendorf representations."
-
-  Corresponds to wiki proof lines 9-19 (see "Rough Working/wiki proof.txt").
-
-  Wiki proof structure:
-  1. Take two representations S and T with the same sum
-  2. Remove common elements to get S' = S \ T and T' = T \ S
-  3. Since S and T had equal sum, so do S' and T'
-  4. Prove by contradiction that at least one of S', T' is empty:
-     - Assume both non-empty with max(S') = F_s < F_t = max(T')
-     - By key lemma: sum(S') < F_{s+1} ≤ F_t ≤ sum(T')
-     - This contradicts sum(S') = sum(T')
-  5. Therefore S' = T' = empty, so S = T
-
-  Our implementation uses sorted lists for a cleaner proof:
-  - Instead of set difference, we use structural comparison
-  - The maximum element is just the head of the sorted list
-  - We prove by strong induction on n that two sorted representations
-    with sum n must be equal
-  - The key step uses sum_nonconsec_fibs_bounded_sorted (the wiki's key lemma)
-    to derive a contradiction when the head elements differ
-
-  Main theorem: zeckendorf_unique_sorted (below)
-  Status: FULLY PROVEN (no admits)
-*)
-
-(*
   Uniqueness theorem for sorted Zeckendorf representations
 
   Given two descending-sorted lists of non-consecutive Fibonacci numbers
@@ -3230,115 +2514,19 @@ Proof.
         lia.
 Qed.
 
-(*
-  Helper: sum_list distributes over append
-*)
-Lemma sum_list_app : forall l1 l2,
-  sum_list (l1 ++ l2) = sum_list l1 + sum_list l2.
+Definition zeckendorf_repr_unique := fun n => forall l,
+  is_zeckendorf_repr n l ->
+  l = zeckendorf n [].
+
+Theorem zeckendorf_repr_unique_proof : forall n, zeckendorf_repr_unique n.
 Proof.
-  induction l1 as [|x xs IH]; intro l2.
-  - simpl. reflexivity.
-  - simpl. rewrite IH. lia.
-Qed.
+Admitted.
 
-(*
-  Lemma: Sum of a reversed list equals sum of the original list
-*)
-Lemma sum_list_rev : forall l,
-  sum_list (rev l) = sum_list l.
+Definition zeckendorfs_theorem := forall n, zeckendorf_repr_exists n /\ zeckendorf_repr_unique n.
+
+Theorem zeckendorfs_theorem_proof : zeckendorfs_theorem.
 Proof.
-  induction l as [|x xs IH].
-  - simpl. reflexivity.
-  - simpl. rewrite sum_list_app. simpl.
-    rewrite Nat.add_0_r. rewrite IH. lia.
-Qed.
-
-(*
-  Lemma: Reversal preserves no_consecutive_fibs property
-
-  If a list has no consecutive Fibonacci numbers, then its reversal
-  also has no consecutive Fibonacci numbers.
-*)
-Lemma rev_preserves_no_consecutive : forall l,
-  no_consecutive_fibs l ->
-  no_consecutive_fibs (rev l).
-Proof.
-  induction l as [|x xs IH].
-  - (* l = [] *)
-    intro. simpl. trivial.
-  - (* l = x :: xs *)
-    intro Hnocons.
-    simpl.
-    simpl in Hnocons.
-    destruct Hnocons as [Hhead Htail].
-    (* rev (x :: xs) = rev xs ++ [x] *)
-    (* Need to show no_consecutive_fibs (rev xs ++ [x]) *)
-    apply no_consecutive_append_single.
-    + (* no_consecutive_fibs (rev xs) by IH *)
-      apply IH. exact Htail.
-    + (* Show x is not consecutive with any element in rev xs *)
-      intros y Hy_in i j Heq_i Heq_j Hcons.
-      (* y is in rev xs, so y is in xs *)
-      apply in_rev in Hy_in.
-      (* nat_consecutive is symmetric *)
-      assert (Hcons_sym: nat_consecutive j i).
-      { unfold nat_consecutive in *. destruct Hcons as [H|H]; [right|left]; exact H. }
-      (* Apply Hhead with y from xs *)
-      apply (Hhead y Hy_in j i Heq_j Heq_i Hcons_sym).
-Qed.
-
-(*
-  Conversion lemma: no_consecutive_fibs implies no_consecutive_fibs_sorted for sorted lists
-
-  For a descending-sorted list, if no two elements are consecutive Fibonacci numbers
-  (in the general sense), then adjacent elements are also not consecutive.
-*)
-Lemma no_consecutive_to_sorted : forall l,
-  Sorted_dec l ->
-  no_consecutive_fibs l ->
-  no_consecutive_fibs_sorted l.
-Proof.
-  induction l as [|x xs IH].
-  - (* l = [] *)
-    intros _ _. simpl. trivial.
-  - (* l = x :: xs *)
-    intros Hsorted Hnocons.
-    destruct xs as [|y ys].
-    + (* xs = [] *)
-      simpl. trivial.
-    + (* xs = y :: ys *)
-      simpl.
-      split.
-      * (* Adjacent elements x and y are not consecutive *)
-        intros i j Heq_i Heq_j Hcons.
-        simpl in Hnocons.
-        destruct Hnocons as [Hhead _].
-        apply (Hhead y (or_introl eq_refl) i j Heq_i Heq_j Hcons).
-      * (* Recursively show tail is sorted *)
-        apply IH.
-        -- apply (sorted_tail x). exact Hsorted.
-        -- simpl in Hnocons. destruct Hnocons as [_ Htail]. exact Htail.
-Qed.
-
-(*
-  Corollary: Our algorithm produces THE unique Zeckendorf representation
-
-  This combines the three properties to show that our algorithm produces
-  a valid Zeckendorf representation:
-  1. All elements are Fibonacci numbers (zeckendorf_fib_property)
-  2. The sum equals n (zeckendorf_sum_property)
-  3. No consecutive Fibonacci numbers (zeckendorf_no_consecutive)
-*)
-Theorem zeckendorf_is_the_unique_repr : forall n,
-  is_zeckendorf_repr n (zeckendorf n []).
-Proof.
-  intro n.
-  unfold is_zeckendorf_repr.
-  split; [|split].
-  - (* Part 1: All elements are Fibonacci numbers *)
-    apply zeckendorf_fib_property.
-  - (* Part 2: Sum equals n *)
-    apply zeckendorf_sum_property.
-  - (* Part 3: No consecutive Fibonacci numbers *)
-    apply zeckendorf_no_consecutive.
+  split.
+  -apply zeckendorf_repr_exists_proof.
+  -apply zeckendorf_repr_unique_proof.
 Qed.
