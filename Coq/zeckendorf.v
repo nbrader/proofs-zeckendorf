@@ -274,16 +274,22 @@ Qed.
 *)
 Lemma in_fibs_upto_le : forall x n,
   In x (fibs_upto n) -> x <= n.
+Proof.
   intros x n Hin.
-  admit.
-Proof.
-Admitted.
-
-Lemma fib_decrease : forall x n, In x (fibs_upto n) -> x > 0 -> x < n -> n - x < n.
-Proof.
-  intros x n Hin Hpos Hlt.
-  apply Nat.sub_lt; auto with arith.
+  unfold fibs_upto in Hin.
+  remember (seq 2 (S n)) as indices.
+  clear Heqindices.
+  induction indices as [|i is IH].
+  - simpl in Hin. inversion Hin.
+  - simpl in Hin.
+    destruct (Nat.leb (fib i) n) eqn:Hleb.
+    + simpl in Hin. destruct Hin as [Heq | Hin'].
+      * subst x. apply Nat.leb_le. exact Hleb.
+      * apply IH. exact Hin'.
+    + inversion Hin.
 Qed.
+
+
 
 (* Helper lemma: In x (rev l) -> In x l *)
 Lemma in_list_rev : forall {A} (x : A) l,
