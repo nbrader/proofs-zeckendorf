@@ -355,10 +355,6 @@ Fixpoint sum_list (l : list nat) : nat :=
   | x :: xs => x + sum_list xs
   end.
 
-(* Computation lemmas for zeckendorf *)
-Lemma zeckendorf_0 : forall acc, zeckendorf 0 acc = acc.
-Proof. intro. simpl. reflexivity. Qed.
-
 (*
   Main lemma: All elements produced by zeckendorf_fuel are Fibonacci numbers
 
@@ -675,34 +671,6 @@ Proof.
       lia.
 Qed.
 
-(* Sorted lists are automatically NoDup *)
-Lemma sorted_NoDup : forall l,
-  Sorted_dec l -> NoDup l.
-Proof.
-  induction l as [|x xs IH]; intro Hsorted.
-  - constructor.
-  - constructor.
-    + intro Hin.
-      assert (Hgt: x > x).
-      { destruct xs as [|y ys].
-        - simpl in Hin. contradiction.
-        - apply (sorted_head_max x (y :: ys) Hsorted x Hin). }
-      lia.
-    + apply IH. destruct xs as [|y ys]; simpl in *; auto.
-      destruct Hsorted. auto.
-Qed.
-
-(* For sorted lists, max is simply the head element *)
-Definition sorted_max (l : list nat) : option nat :=
-  match l with
-  | [] => None
-  | x :: _ => Some x
-  end.
-
-(* Note: For sorted lists in descending order, sorted_max l simply returns the head.
-   This is equivalent to list_max l when the list is sorted, but much simpler to work with.
-   We will prove sorted_max_correct after list_max is defined later in the file. *)
-
 (*
   Simplified no_consecutive predicate for sorted lists
 
@@ -753,63 +721,6 @@ Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
       forall i j, fib i = x -> fib j = y -> ~nat_consecutive i j) /\
     no_consecutive_fibs xs
   end.
-(* Appending a single element to the end preserves the predicate when it is compatible *)
-Lemma no_consecutive_append_single : forall l x,
-  no_consecutive_fibs l ->
-  (forall y, In y l ->
-    forall i j, fib i = y -> fib j = x -> ~nat_consecutive i j) ->
-  no_consecutive_fibs (l ++ [x]).
-Proof.
-  induction l as [|a l IH]; intros x Hnoc Hcompat; simpl in *.
-  - split.
-    + intros y Hy. inversion Hy.
-    + constructor.
-  - destruct Hnoc as [Hhead Htail]. simpl. split.
-    + intros y Hy i j Hfi Hfj Hcons.
-      apply in_app_or in Hy.
-      destruct Hy as [Hy|Hy].
-      * specialize (Hhead y Hy i j Hfi Hfj).
-        apply Hhead. exact Hcons.
-      * simpl in Hy.
-        destruct Hy as [Hy|Hy].
-        -- subst y.
-           specialize (Hcompat a (or_introl eq_refl) i j Hfi Hfj).
-           apply Hcompat. exact Hcons.
-        -- contradiction.
-    + apply IH.
-      * exact Htail.
-      * intros y Hy i j Hfi Hfj.
-        apply (Hcompat y (or_intror Hy) i j Hfi Hfj).
-Qed.
-
-(* Helper lemma: if no_consecutive_fibs l, and fib i and fib j are both in l with consecutive indices, contradiction *)
-(* Note: requires fib i ≠ fib j to handle the fib 1 = fib 2 = 1 case *)
-Lemma no_consecutive_both_in : forall l i j,
-  no_consecutive_fibs l ->
-  fib i <> fib j ->
-  In (fib i) l ->
-  In (fib j) l ->
-  nat_consecutive i j ->
-  False.
-Proof.
-  induction l as [|x xs IH]; intros i j Hnocons Hneq_fib Hi Hj Hcons.
-  - (* l = [] *) simpl in Hi. contradiction.
-  - (* l = x :: xs *)
-    simpl in Hnocons. destruct Hnocons as [Hhead Htail].
-    simpl in Hi, Hj.
-    destruct Hi as [Hxi | Hxsi]; destruct Hj as [Hxj | Hxsj].
-    + (* Both equal x: fib i = x = fib j *)
-      (* But we have fib i ≠ fib j from Hneq_fib, contradiction! *)
-      exfalso. apply Hneq_fib.
-      transitivity x; [symmetry; exact Hxi | exact Hxj].
-    + (* fib i = x, fib j in xs *)
-      apply (Hhead (fib j) Hxsj i j); auto.
-    + (* fib i in xs, fib j = x *)
-      apply (Hhead (fib i) Hxsi j i); auto.
-      unfold nat_consecutive in *. lia.
-    + (* Both in xs *)
-      apply (IH i j Htail Hneq_fib Hxsi Hxsj Hcons).
-Qed.
 
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
@@ -1025,87 +936,6 @@ Proof.
     + contradiction.
 Qed.
 
-(*
-  Growth lemma: For n >= 5, fib n >= n.
-*)
-
-(* Helper lemma: In and takeWhile relationship *)
-Lemma takeWhile_In : forall {A} (f : A -> bool) x l,
-  In x (takeWhile f l) -> In x l /\ f x = true.
-Proof.
-  intros A f x l.
-  induction l as [|y ys IH].
-  - simpl. tauto.
-  - simpl. destruct (f y) eqn:Efy.
-    + simpl. intros [H|H].
-      * subst. split. left. reflexivity. assumption.
-      * apply IH in H as [H1 H2]. split. right. assumption. assumption.
-    + simpl. tauto.
-Qed.
-
-Lemma fibs_upto_succ_succ : forall n,
-  fibs_upto (S (S n)) =
-    1 :: 2 ::
-      takeWhile (fun x => Nat.leb x (S (S n)))
-                (map fib (seq 4 (S n))).
-Proof.
-  intro n.
-  unfold fibs_upto.
-  simpl (seq 2 (S (S (S n)))).
-  simpl.
-  destruct (Nat.leb (fib 2) (S (S n))) eqn:Hleb1.
-  - simpl.
-    simpl (seq 3 (S (S n))).
-    simpl.
-    destruct (Nat.leb (fib 3) (S (S n))) eqn:Hleb2.
-    + simpl. reflexivity.
-    + apply Nat.leb_gt in Hleb2. simpl in Hleb2. lia.
-  - apply Nat.leb_gt in Hleb1. simpl in Hleb1. lia.
-Qed.
-
-(* Helper lemma: seq produces a strictly increasing sequence *)
-Lemma seq_ordered : forall start len x y,
-  In x (seq start len) ->
-  In y (seq start len) ->
-  x < y ->
-  exists prefix suffix, seq start len = prefix ++ x :: suffix /\ In y suffix.
-Proof.
-  intros start len.
-  generalize dependent start.
-  induction len as [|len' IH]; intros start x y Hx Hy Hlt.
-  - simpl in Hx. contradiction.
-  - simpl in Hx, Hy.
-    destruct Hx as [Hx_eq|Hx_in], Hy as [Hy_eq|Hy_in].
-    + (* x = start, y = start: contradiction with x < y *)
-      subst. lia.
-    + (* x = start, y in tail *)
-      subst x. exists [], (seq (S start) len'). split; [reflexivity | assumption].
-    + (* x in tail, y = start: contradiction with x < y *)
-      subst. apply seq_ge in Hx_in. lia.
-    + (* both in tail *)
-      apply IH with (start := S start) in Hlt as [prefix [suffix [Heq Hy_in_suffix]]]; try assumption.
-      exists (start :: prefix), suffix. split.
-      * simpl. rewrite Heq. reflexivity.
-      * assumption.
-Qed.
-
-(* Helper lemma: if x is in l, f x = true, and all elements before x in l satisfy f, then x is in takeWhile f l *)
-Lemma In_takeWhile_prefix : forall {A} (f : A -> bool) x l prefix suffix,
-  l = prefix ++ x :: suffix ->
-  (forall y, In y prefix -> f y = true) ->
-  f x = true ->
-  In x (takeWhile f l).
-Proof.
-  intros A f x l prefix suffix Heq Hprefix Hfx.
-  subst l.
-  induction prefix as [|p ps IH].
-  - simpl. rewrite Hfx. left. reflexivity.
-  - simpl. assert (Hfp: f p = true).
-    { apply Hprefix. left. reflexivity. }
-    rewrite Hfp. simpl. right.
-    apply IH. intros y Hy. apply Hprefix. right. assumption.
-Qed.
-
 (* Helper lemma: fib is strictly monotonic for indices >= 2 *)
 Lemma fib_mono_lt : forall i j,
   i >= 2 -> j >= 2 -> i < j -> fib i < fib j.
@@ -1224,21 +1054,6 @@ Proof.
     (* Combine with Hfib_eq *)
     rewrite <- Hfib_eq in Hgoal.
     exact Hgoal.
-Qed.
-
-(* Helper lemma: elements in the tail of seq are strictly greater than the head *)
-Lemma seq_tail_gt_head : forall start len i is,
-  seq start (S len) = i :: is ->
-  forall k, In k is -> k > i.
-Proof.
-  intros start len i is Hseq k Hk_in.
-  (* seq start (S len) = start :: seq (S start) len *)
-  simpl in Hseq.
-  injection Hseq as Hi His.
-  subst i. subst is.
-  (* Now k is in seq (S start) len *)
-  apply seq_ge in Hk_in.
-  lia.
 Qed.
 
 (* Helper lemma: if fib k passes the filter and k is in a sequence from seq,
@@ -1620,106 +1435,6 @@ Proof.
 Qed.
 
 (*
-  Helper lemma: For small n where fib (S n) < n, we have n < fib (S (S n)).
-  This property holds trivially since fib (S n) < n is impossible for n >= 2.
-*)
-Lemma fib_small_gap : forall n,
-  fib (S n) < n ->
-  n < fib (S (S n)).
-Proof.
-  intros n Hlt.
-  (* fib (S n) < n is actually impossible for n >= 2 *)
-  (* fib 1 = 1, fib 2 = 1, fib 3 = 2, fib 4 = 3, fib 5 = 5, ... *)
-  (* So fib (S 0) = fib 1 = 1, not < 0 *)
-  (* fib (S 1) = fib 2 = 1, not < 1 *)
-  (* fib (S 2) = fib 3 = 2, not < 2 *)
-  (* For n >= 2, we have fib (S n) >= n *)
-  destruct n as [|[|n']].
-  - (* n = 0: fib 1 = 1, not < 0 *)
-    simpl in Hlt. lia.
-  - (* n = 1: fib 2 = 1, not < 1 *)
-    simpl in Hlt. lia.
-  - (* n >= 2: fib (S (S n')) >= S (S n') *)
-    (* This contradicts the hypothesis because fib grows *)
-    (* For n = S (S n'), fib (S n) = fib (S (S (S n'))) *)
-    (* We need to show fib (S (S (S n'))) >= S (S (S n')), i.e., fib (3 + n') >= 3 + n' *)
-    destruct n' as [|[|[|n'']]].
-    + (* n' = 0, n = 2: fib 3 = 2, not < 2 *)
-      simpl in Hlt. lia.
-    + (* n' = 1, n = 3: fib 4 = 3, not < 3 *)
-      simpl in Hlt. lia.
-    + (* n' = 2, n = 4: fib 5 = 5, not < 4 *)
-      simpl in Hlt. lia.
-    + (* n' >= 3, so n >= 5: use fib_linear_growth *)
-      (* n = S (S (S (S (S n'')))), so S n = S (S (S (S (S (S n''))))) *)
-      (* S n >= 6, so we can apply fib_linear_growth *)
-      exfalso.
-      assert (Hgrowth: fib (S (S (S (S (S (S n'')))))) >= S (S (S (S (S (S n'')))))).
-      { apply fib_linear_growth. lia. }
-      lia.
-Qed.
-
-(*
-  Helper: Fibonacci numbers are injective for indices >= 2
-
-  This states that if fib(i) = fib(j) for i,j >= 2, then i = j.
-
-  Proof: Use fib_mono_lt to show that fib is strictly monotonic for n >= 2,
-  which immediately gives us injectivity by trichotomy.
-*)
-Lemma fib_injective : forall i j,
-  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
-Proof.
-  intros i j Hi Hj Heq.
-  (* Use trichotomy: either i < j, i = j, or i > j *)
-  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heq_ij | Hgt]].
-  - (* Case 1: i < j, then fib i < fib j by fib_mono_lt, contradicting Heq *)
-    exfalso.
-    assert (H: fib i < fib j) by (apply fib_mono_lt; assumption).
-    lia.
-  - (* Case 2: i = j *)
-    assumption.
-  - (* Case 3: i > j, then fib j < fib i by fib_mono_lt, contradicting Heq *)
-    exfalso.
-    assert (H: fib j < fib i) by (apply fib_mono_lt; assumption).
-    lia.
-Qed.
-
-(*
-  Helper lemma: Elements in fibs_upto n have indices bounded by the source sequence.
-  Since fibs_upto n uses seq 2 (S n), all indices are in [2, n+2].
-*)
-Lemma in_fibs_upto_bounded : forall x n,
-  In x (fibs_upto n) -> exists k, 2 <= k <= n + 2 /\ fib k = x.
-Proof.
-  intros x n Hin.
-  unfold fibs_upto in Hin.
-  remember (seq 2 (S n)) as l.
-  assert (Hbounds: forall y, In y l -> 2 <= y <= n + 2).
-  { intros y Hiny. rewrite Heql in Hiny.
-    apply in_seq in Hiny. lia. }
-  clear Heql.
-  induction l as [|a l' IH].
-  - (* Empty list, contradiction *)
-    simpl in Hin. inversion Hin.
-  - (* List is a :: l' *)
-    simpl in Hin.
-    destruct (Nat.leb (fib a) n) eqn:Hleb.
-    + (* fib a <= n, so a is included *)
-      simpl in Hin. destruct Hin as [Heq | Hin'].
-      * (* x = fib a *)
-        exists a. split.
-        -- apply Hbounds. left. reflexivity.
-        -- rewrite <- Heq. reflexivity.
-      * (* x is in the tail *)
-        assert (Hbounds': forall y, In y l' -> 2 <= y <= n + 2).
-        { intros y Hiny. apply Hbounds. right. assumption. }
-        apply IH; assumption.
-    + (* fib a > n, takeWhile stops *)
-      inversion Hin.
-Qed.
-
-(*
   Helper predicate: A list is a valid Zeckendorf representation of n
 
   A list l is a valid Zeckendorf representation of n if:
@@ -1732,53 +1447,6 @@ Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
   sum_list l = n /\
   no_consecutive_fibs l /\
   Sorted_dec l.
-
-(*
-  ==============================================================================
-  HELPER LEMMAS FOR UNIQUENESS PROOF
-  ==============================================================================
-*)
-
-(* Helper: If z is a Fibonacci number with z < fib k and z <> fib(k-1),
-   then the index of z is at most k-2 (for k >= 3) *)
-Lemma fib_index_bound : forall z k,
-  k >= 3 ->
-  (exists i, fib i = z) ->
-  z < fib k ->
-  z <> fib (k - 1) ->
-  exists i, i <= k - 2 /\ fib i = z.
-Proof.
-  intros z k Hk_ge [i Heq_i] Hz_lt Hz_neq.
-  exists i. split.
-  - (* Show i <= k - 2 *)
-    (* z = fib i < fib k, so i < k by strict monotonicity *)
-    (* z <> fib(k-1), so i <> k-1 *)
-    (* Therefore i <= k - 2 *)
-
-    (* First show i < k *)
-    assert (Hi_lt_k: i < k).
-    { (* By contradiction: if i >= k, then fib i >= fib k by monotonicity *)
-      destruct (Nat.lt_ge_cases i k) as [Hlt | Hge]; [exact Hlt |].
-      exfalso.
-      assert (Hfib_ge: fib k <= fib i).
-      { (* Need to show fib k <= fib i when k <= i and both >= 2 *)
-        destruct (Nat.eq_dec k i) as [Heq_ki | Hneq_ki].
-        - (* k = i: fib k = fib i *)
-          rewrite Heq_ki. lia.
-        - (* k < i: use fib_mono_lt *)
-          assert (Hk_lt_i: k < i) by lia.
-          apply Nat.lt_le_incl.
-          apply fib_mono_lt; try lia. }
-      rewrite Heq_i in Hfib_ge. lia. }
-
-    (* Now show i <> k - 1 *)
-    assert (Hi_neq: i <> k - 1).
-    { intro Heq. apply Hz_neq. rewrite <- Heq_i. f_equal. exact Heq. }
-
-    (* Combine: i < k and i <> k - 1, so i <= k - 2 *)
-    lia.
-  - exact Heq_i.
-Qed.
 
 (*
   ==============================================================================
@@ -2919,20 +2587,6 @@ Proof.
         -- exact Hxs_nocons.
 Qed.
 
-(* Helper lemma: Fibonacci numbers >= 2 come from indices >= 2 *)
-Lemma fib_ge_2_index : forall z,
-  z >= 2 ->
-  (exists k, z = fib k) ->
-  exists i, i >= 2 /\ fib i = z.
-Proof.
-  intros z Hz_ge [k Hfib_k].
-  subst z.
-  destruct k as [|[|k']].
-  - simpl in Hz_ge. lia.
-  - simpl in Hz_ge. lia.
-  - exists (S (S k')). split; [lia | reflexivity].
-Qed.
-
 (* Main helper: convert Fib property to >= 2 form for Zeckendorf representations *)
 Lemma zeckendorf_repr_fib_indices_ge_2 : forall l n,
   is_zeckendorf_repr n l ->
@@ -2943,7 +2597,6 @@ Proof.
   destruct (Hfib x Hx_in) as [k [Hk_ge Hfib_k]].
   exists k. split. exact Hk_ge. symmetry. exact Hfib_k.
 Qed.
-
 
 Definition zeckendorf_repr_unique := fun n => forall l,
   is_zeckendorf_repr n l ->
