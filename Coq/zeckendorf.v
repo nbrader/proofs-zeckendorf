@@ -751,23 +751,6 @@ Proof.
     + apply (IH _ _ Htail Hneq Hi Hj Hcons).
 Qed.
 
-(* Sorted lists (strictly descending) are duplicates-free. *)
-Lemma sorted_NoDup : forall l,
-  Sorted_dec l -> NoDup l.
-Proof.
-  induction l as [|x xs IH]; intro Hsorted.
-  - constructor.
-  - constructor.
-    + intro Hin.
-      assert (Hgt: x > x).
-      { destruct xs as [|y ys].
-        - simpl in Hin. contradiction.
-        - apply (sorted_head_max x (y :: ys) Hsorted x Hin). }
-      lia.
-    + apply IH. destruct xs as [|y ys]; simpl in *; auto.
-      destruct Hsorted. auto.
-Qed.
-
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
@@ -1013,22 +996,6 @@ Proof.
         apply fib_mono. right. assumption. }
   (* Combine by transitivity *)
   lia.
-Qed.
-
-(* Injectivity: equal Fibonacci values imply equal indices (for i,j >= 2) *)
-Lemma fib_injective : forall i j,
-  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
-Proof.
-  intros i j Hi Hj Heq.
-  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heqij | Hgt]].
-  - exfalso.
-    assert (Hfib_lt: fib i < fib j) by (apply fib_mono_lt; assumption).
-    lia.
-  - exact Heqij.
-  - exfalso.
-    assert (Hfib_lt: fib j < fib i).
-    { apply fib_mono_lt; try assumption; lia. }
-    lia.
 Qed.
 
 (* Helper lemma: Fibonacci numbers grow at least linearly for n >= 5 *)
@@ -1531,17 +1498,6 @@ Proof.
       - assert (Hi_gt_k: i > k) by lia.
         apply Nat.lt_le_incl. apply fib_mono_lt; try lia. }
     rewrite Heq_i in Hfib_ge. lia.
-Qed.
-
-(* Any Fibonacci number with value >= 2 comes from an index >= 2. *)
-Lemma fib_ge_2_index : forall z,
-  z >= 2 ->
-  (exists k, z = fib k) ->
-  exists i, i >= 2 /\ fib i = z.
-Proof.
-  intros z Hz_ge [k Hfib_k].
-  destruct k as [|[|k']] ; simpl in Hfib_k; subst z; try lia.
-  exists (S (S k')). split; [lia|reflexivity].
 Qed.
 
 (*
