@@ -1,0 +1,126 @@
+==================================================================================================
+ZECKENDORF'S THEOREM – WIKI PROOF VS COQ DEVELOPMENT
+==================================================================================================
+
+This note explains how the formal proof in `Coq/zeckendorf.v` mirrors the informal
+argument from `wiki proof.txt`. The Coq development does not deviate from the wiki
+strategy—it implements the same greedy existence proof and the same “remove the
+overlap and compare maxima” uniqueness proof, with lists standing in for the sets
+used in the prose proof.
+
+==================================================================================================
+MAIN STATEMENTS
+==================================================================================================
+
+- Predicate “`l` is a Zeckendorf representation of `n`”  
+  `is_zeckendorf_repr` packages the four required properties  
+  `[Coq/zeckendorf.v:1476-1480]`
+
+- Existence theorem  
+  `zeckendorf_repr_exists : forall n, is_zeckendorf_repr n (zeckendorf n)`  
+  `[Coq/zeckendorf.v:1703-1716]`
+
+- Uniqueness theorem  
+  `zeckendorf_repr_unique : forall n l, is_zeckendorf_repr n l -> l = zeckendorf n`  
+  `[Coq/zeckendorf.v:2338-2363]`
+
+- Combined statement  
+  `zeckendorf_exists_unique : forall n, ...` gives existence ∧ uniqueness together  
+  `[Coq/zeckendorf.v:2365-2374]`
+
+==================================================================================================
+PART 1 – EXISTENCE (Wiki steps mirrored in Coq)
+==================================================================================================
+
+1. **Induction skeleton + greedy construction**  
+   The wiki proof uses strong induction on `n`, picking the largest Fibonacci at
+   each step. The Coq file follows the same outline: the introductory comment
+   records this plan `[Coq/zeckendorf.v:13-58]`, Fibonacci numbers are defined in
+   `fib` `[Coq/zeckendorf.v:61-130]`, the finite list of candidates is built by
+   `fibs_upto` `[Coq/zeckendorf.v:74-81]`, and the greedy algorithm itself is the
+   structurally recursive function `zeckendorf_fuel` with its empty-accumulator
+   wrapper `zeckendorf` `[Coq/zeckendorf.v:331-354]`.  The “fuel” parameter
+   realizes the strong-induction/measure argument from the wiki article.
+
+2. **Selecting the largest Fibonacci `F_j ≤ n`**  
+   The wiki proof assumes the existence of such an index `j`.  The Coq function
+   computes it by reversing `fibs_upto n` so that the head is the largest term,
+   then peeling it off `[Coq/zeckendorf.v:337-343]`.  Lemma
+   `largest_fib_in_fibs_upto` formalizes the fact that this element really is the
+   largest Fibonacci not exceeding `n` and that `n < F_{j+1}` `[Coq/zeckendorf.v:1207-1244]`.
+
+3. **Working with the remainder `b = n - F_j`**  
+   The wiki argument relies on the inequality `b < F_{j-1}`.  In Coq this is the
+   lemma `remainder_less_than_prev_fib`, which shows that subtracting the chosen
+   Fibonacci strictly decreases the argument in a way that forbids the next
+   smaller index `[Coq/zeckendorf.v:786-818]`.  This lemma feeds directly into
+   the termination argument for `zeckendorf_fuel` and into the non-consecutive
+   invariant.
+
+4. **Inductive hypotheses: only Fibonacci numbers, strict decrease, no repeats**  
+   The recursive call `zeckendorf_fuel fuel' (n - x) acc` corresponds to the wiki
+   induction hypothesis that every smaller `b` has a Zeckendorf decomposition.
+   The Coq proof packages the inductive invariants in reusable lemmas:
+   - `zeckendorf_acc_fib` / `zeckendorf_fib_property` ensure every element in
+     the result is some `fib k` with `k ≥ 2` `[Coq/zeckendorf.v:434-443,597-603]`.
+   - `zeckendorf_acc_sum` / `zeckendorf_sum_property` prove the sum condition
+     `[Coq/zeckendorf.v:548-557,613-621]`.
+   - `zeckendorf_fuel_no_consecutive_empty` plus its wrapper
+     `zeckendorf_no_consecutive` show that removing the largest Fibonacci keeps
+     the remainder free of `F_{j-1}` and hence prevents consecutive indices
+     `[Coq/zeckendorf.v:1331-1466]`.
+   - `zeckendorf_fuel_sorted_empty` / `zeckendorf_sorted` give the descending
+     order needed later for uniqueness `[Coq/zeckendorf.v:1633-1701]`.
+
+5. **Existence conclusion**  
+   The four invariants are bundled precisely into `is_zeckendorf_repr`.  Applying
+   the lemmas above with an empty accumulator yields the existence theorem
+   `zeckendorf_repr_exists`, matching the wiki claim that every `n` has a valid
+   Zeckendorf representation `[Coq/zeckendorf.v:1703-1716]`.
+
+==================================================================================================
+PART 2 – UNIQUENESS (Wiki steps mirrored in Coq)
+==================================================================================================
+
+1. **Key lemma about sums of non-consecutive Fibonacci numbers**  
+   The wiki proof’s lemma (“the sum of any non-empty, distinct, non-consecutive
+   set with largest element `F_j` is < `F_{j+1}`”) appears verbatim as
+   `sum_nonconsec_fibs_bounded_sorted` `[Coq/zeckendorf.v:1926-2071]`.  The proof
+   is by induction on `j`, just as in the wiki article, using the sorted-list
+   formulation to streamline the reasoning.
+
+2. **Representations are sorted lists without consecutive indices**  
+   The predicate `is_zeckendorf_repr` guarantees that every representation used
+   in the uniqueness proof is Fibonacci-only, sums to `n`, has no consecutive
+   indices, and is sorted `[Coq/zeckendorf.v:1476-1480]`.  The lemmas
+   `zeckendorf_fuel_sorted_empty`, `zeckendorf_no_consecutive`, and
+   `zeckendorf_repr_fib_indices_ge_2` establish these properties for the
+   algorithm’s output so that both lists in the uniqueness argument satisfy the
+   lemma’s hypotheses `[Coq/zeckendorf.v:1633-1701,1460-1466,2328-2335]`.
+
+3. **Removing the overlap and comparing maxima**  
+   The wiki proof removes common elements and compares the largest remaining
+   Fibonacci numbers.  Coq mirrors this with a structural induction on the sum in
+   `zeckendorf_unique_sorted` `[Coq/zeckendorf.v:2073-2134]`: once the heads of
+   the two sorted lists are unequal, the sum-bounding lemma forces a
+   contradiction (`sum(S') < F_t ≤ sum(T')`).  If the heads are equal, they are
+   stripped (analogous to deleting the shared element from both sets) and the
+   argument recurses on the smaller sum.
+
+4. **Uniqueness conclusion**  
+   `zeckendorf_repr_unique` instantiates `zeckendorf_unique_sorted` with the
+   concrete properties guaranteed by `is_zeckendorf_repr`, yielding the wiki
+   claim that there cannot be two different Zeckendorf representations of the
+   same number `[Coq/zeckendorf.v:2338-2363]`.  Combined with the existence
+   theorem, `zeckendorf_exists_unique` states the full theorem `[Coq/zeckendorf.v:2365-2374]`.
+
+==================================================================================================
+SUMMARY
+==================================================================================================
+
+- The Coq development strictly follows the wiki proof’s two main steps:
+  greedy existence via the largest Fibonacci ≤ `n`, and uniqueness via the sum
+  bound on non-consecutive Fibonacci numbers.
+- Differences are purely representational (sorted lists instead of abstract sets,
+  explicit accumulator/fuel parameters to justify recursion).  Mathematically,
+  each informal step has a direct formal counterpart cited above.
