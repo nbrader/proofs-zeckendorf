@@ -751,6 +751,23 @@ Proof.
     + apply (IH _ _ Htail Hneq Hi Hj Hcons).
 Qed.
 
+(* Sorted lists (strictly descending) are duplicates-free. *)
+Lemma sorted_NoDup : forall l,
+  Sorted_dec l -> NoDup l.
+Proof.
+  induction l as [|x xs IH]; intro Hsorted.
+  - constructor.
+  - constructor.
+    + intro Hin.
+      assert (Hgt: x > x).
+      { destruct xs as [|y ys].
+        - simpl in Hin. contradiction.
+        - apply (sorted_head_max x (y :: ys) Hsorted x Hin). }
+      lia.
+    + apply IH. destruct xs as [|y ys]; simpl in *; auto.
+      destruct Hsorted. auto.
+Qed.
+
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
@@ -1969,73 +1986,23 @@ Proof.
     exfalso. lia.
   - (* k >= 2 *)
     destruct k'' as [|k'''].
-    + (* k = 2: fib 2 = 1, fib 3 = 2 *)
-      (* Goal: sum_list (fib 2 :: xs) < fib 3 = 2 *)
-      (* fib 2 = 1, and all elements in xs must be < 1 (since sorted) *)
-      (* But Fibonacci numbers are positive, so xs must be empty or contain only 0 *)
-      assert (Hfib2_val: fib 2 = 1) by reflexivity.
-      assert (Hfib3_val: fib 3 = 2) by reflexivity.
-      rewrite Hfib2_val in *. rewrite Hfib3_val.
-
-      (* All elements in xs are < 1 *)
-      assert (Hxs_lt: forall y, In y xs -> y < 1).
-      { intros y Hy. apply (sorted_tail_lt 1 xs); assumption. }
-
-      (* But all elements are Fibonacci numbers, and fib i > 0 for i >= 1 *)
-      (* So all elements in xs must be 0 = fib 0 *)
-      (* However, if xs contains fib 0 = 0, then we have fib 2 = 1 and fib 0 = 0 adjacent *)
-      (* Actually, let's show xs must be empty *)
-
-      (* If xs is non-empty, let's derive a contradiction *)
-      destruct xs as [|y ys].
-      * (* xs = [] *)
-        simpl. lia.
-      * (* xs = y :: ys *)
-        (* y < 1 and y is a Fibonacci number *)
-        assert (Hy_lt: y < 1) by (apply Hxs_lt; simpl; left; reflexivity).
+    + (* k = 2: fib 2 = 1, so the tail must be empty *)
+      assert (Hxs_nil: xs = []).
+      { destruct xs as [|y ys]; [reflexivity|].
+        assert (Hy_lt: y < fib 2).
+        { apply (sorted_tail_lt (fib 2) (y :: ys)).
+          - exact Hsorted.
+          - simpl. left. reflexivity. }
         assert (Hy_fib: exists i, i >= 2 /\ fib i = y).
         { apply Hfib. simpl. right. left. reflexivity. }
         destruct Hy_fib as [i [Hi_ge Heq_i]].
-        (* Since fib i = y < 1 and fib 0 = 0, fib 1 = 1, we must have i = 0 *)
-        assert (Hi_eq: i = 0).
-        { destruct i as [|[|i']].
-          - reflexivity.
-          - exfalso. assert (H: fib 1 = 1) by reflexivity. lia.
-          - exfalso. assert (H: fib 2 = 1) by reflexivity.
-            assert (Hfib_pos: fib (S (S i')) > 0) by (apply fib_pos; lia). lia. }
-        subst i.
-        (* So y = fib 0 = 0 *)
-        assert (Hy_eq: y = 0) by (rewrite <- Heq_i; reflexivity).
-        subst y.
-        (* Now we have 1 :: 0 :: ys, which means fib 2 and fib 0 are adjacent *)
-        (* Check no_consecutive_fibs_sorted *)
-        simpl in Hnocons. destruct Hnocons as [Hno_adj _].
-        (* Hno_adj says: forall i j, fib i = 1 -> fib j = 0 -> ~nat_consecutive i j *)
-        (* But 2 and 0 are not consecutive (nat_consecutive means differ by 1) *)
-        (* So this is actually fine! *)
-        (* Let me reconsider... sum_list (1 :: 0 :: ys) = 1 + sum_list (0 :: ys) *)
-        simpl.
-        (* We need: 1 + sum_list (0 :: ys) < 2 *)
-        (* This means: sum_list (0 :: ys) < 1 *)
-        (* Since 0 is in the list and all elements are non-negative, sum >= 0 *)
-        (* We need to show sum_list (0 :: ys) <= 0, which means ys = [] *)
-
-        assert (Hys_empty: ys = []).
-        { destruct ys as [|z zs].
-          - reflexivity.
-          - (* z is in the list and z < 0 (since sorted and z < y = 0) *)
-            assert (Hz_lt: z < 0).
-            { assert (Hsorted_0zs: Sorted_dec (0 :: z :: zs)).
-              { apply (sorted_tail 1). exact Hsorted. }
-              simpl in Hsorted_0zs. destruct Hsorted_0zs as [H0z _]. exact H0z. }
-            (* But z is a Fibonacci number, and all Fibonacci numbers are >= 0 *)
-            assert (Hz_fib: exists i, i >= 2 /\ fib i = z).
-            { apply Hfib. simpl. right. right. left. reflexivity. }
-            destruct Hz_fib as [i' [Hi'_ge Heq_i']].
-            (* fib i' is a nat, so >= 0, but z = fib i' < 0, contradiction *)
-            lia. }
-        subst ys.
-        simpl. lia.
+        rewrite <- Heq_i in Hy_lt.
+        destruct i as [|[|i']]; simpl in Hy_lt; try lia.
+        exfalso.
+        assert (Hzero: fib (S (S i')) = 0) by (apply Nat.lt_1_r; exact Hy_lt).
+        assert (Hpos: fib (S (S i')) > 0) by (apply fib_pos; lia).
+        lia. }
+      subst xs. simpl. lia.
 
     + (* k >= 3: Main inductive case *)
       (* k = S (S (S k''')) >= 3 *)
@@ -2120,7 +2087,7 @@ Proof.
         { intros z Hz.
           apply Hfib. simpl. right.
           simpl in Hz. destruct Hz as [Hz_eq | Hz_in].
-          - left. rewrite <- Heq_i. exact Hz_eq.
+          - left. rewrite Heq_i in Hz_eq. exact Hz_eq.
           - right. exact Hz_in. }
 
         assert (Hsum_tail: sum_list (y :: ys) < fib (S i)).
