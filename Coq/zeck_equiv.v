@@ -251,13 +251,35 @@ Lemma find_fib_index_aux_spec : forall n k b,
   k <= n + 1 ->
   b = n + 1 - k ->
   fib (S (find_fib_index_aux n k b)) > n.
-Proof. Admitted.
+Proof.
+  intros n k b Hle Hb.
+  assert (Hsum : k + b = S n) by lia.
+  clear Hle Hb.
+  revert n k Hsum.
+  induction b as [|b' IH]; intros n k Hsum; simpl in *.
+  - assert (k = S n) by lia. subst k.
+    assert (Hfib := fib_n_plus_two_gt_n n).
+    replace (n + 2) with (S (S n)) in Hfib by lia.
+    exact Hfib.
+  - set (guard := (fib (S k) <=? n)).
+    destruct guard eqn:Hflag; simpl.
+    + admit. (* apply IH. lia. *)
+    + unfold guard in Hflag.
+      apply Nat.leb_gt in Hflag.
+      (* exact Hflag. *)
+      admit.
+Admitted.
 
 (* TODO(codex): Direct corollary: instantiate [find_fib_index_aux_spec]
    with k=0 and b=S n to obtain the witness used by [zeck]. *)
 Lemma min_level_for_index_spec : forall n,
   fib (min_level_for_index n + 1) > n.
-Proof. Admitted.
+Proof.
+  intro n.
+  unfold min_level_for_index.
+  replace (find_fib_index_aux n 0 (S n) + 1) with (S (find_fib_index_aux n 0 (S n))) by lia.
+  apply find_fib_index_aux_spec; lia.
+Qed.
 
 (* TODO(codex): Combine [min_level_for_index_spec] with
    [zeck_lists_entry_repr]; remember zeck grabs nth n in zeck_lists (m-1),
