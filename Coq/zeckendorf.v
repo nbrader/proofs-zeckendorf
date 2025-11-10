@@ -345,8 +345,13 @@ Fixpoint zeckendorf_fuel (fuel n : nat) (acc : list nat) : list nat :=
     end
   end.
 
-Definition zeckendorf (n : nat) (acc : list nat) : list nat :=
+Definition zeckendorf_acc (n : nat) (acc : list nat) : list nat :=
   zeckendorf_fuel n n acc.
+
+(* [zeckendorf_acc] exposes the accumulator-passing style version of the algorithm,
+   while [zeckendorf] is the canonical entry point that starts with an empty accumulator. *)
+Definition zeckendorf (n : nat) : list nat :=
+  zeckendorf_acc n [].
 
 (* Define sum of a list *)
 Fixpoint sum_list (l : list nat) : nat :=
@@ -428,10 +433,10 @@ Qed.
 *)
 Lemma zeckendorf_acc_fib : forall n acc,
   (forall z, In z acc -> exists k, k >= 2 /\ z = fib k) ->
-  forall z, In z (zeckendorf n acc) -> exists k, k >= 2 /\ z = fib k.
+  forall z, In z (zeckendorf_acc n acc) -> exists k, k >= 2 /\ z = fib k.
   intros n acc Hacc_fib z Hz.
   (* Unfold the definition: zeckendorf n acc = zeckendorf_fuel n n acc *)
-  unfold zeckendorf in Hz.
+  unfold zeckendorf_acc in Hz.
   (* Apply the fuel-based lemma with fuel = n >= n *)
   apply (zeckendorf_fuel_acc_fib n n acc Hacc_fib z Hz).
 Qed.
@@ -545,11 +550,11 @@ Qed.
   This instantiates fuel = n and uses the fact that n >= n to apply the fuel-based lemma.
 *)
 Lemma zeckendorf_acc_sum : forall n acc,
-  sum_list (zeckendorf n acc) = sum_list acc + n.
+  sum_list (zeckendorf_acc n acc) = sum_list acc + n.
 Proof.
   intros n acc.
   (* Unfold the definition: zeckendorf n acc = zeckendorf_fuel n n acc *)
-  unfold zeckendorf.
+  unfold zeckendorf_acc.
   (* Apply the fuel-based lemma with fuel = n >= n *)
   apply zeckendorf_fuel_acc_sum. lia.
 Qed.
@@ -589,15 +594,12 @@ Qed.
   Proof: Apply zeckendorf_acc_fib with acc = [], using the fact that
   the empty list trivially satisfies "all elements are Fibonacci numbers".
 *)
-Theorem zeckendorf_fib_property : forall n,
-  let zs := zeckendorf n [] in
-  forall z, In z zs -> exists k, k >= 2 /\ z = fib k.
+Theorem zeckendorf_fib_property : forall n z,
+  In z (zeckendorf n) -> exists k, k >= 2 /\ z = fib k.
 Proof.
-  intros n zs z Hz.
-  unfold zs in Hz.
-  (* Apply zeckendorf_acc_fib with acc = [] *)
-  (* The precondition "all z in [] are Fibonacci" is vacuously true *)
-  apply (zeckendorf_acc_fib n [] (fun z H => match H with end) z Hz).
+  intros n z Hz.
+  (* Apply zeckendorf_acc_fib with acc = [], which vacuously satisfies the precondition *)
+  apply (zeckendorf_acc_fib n [] (fun z' H => match H with end) z Hz).
 Qed.
 
 (*
@@ -609,11 +611,11 @@ Qed.
   sum(result) = sum([]) + n = 0 + n = n.
 *)
 Theorem zeckendorf_sum_property : forall n,
-  sum_list (zeckendorf n []) = n.
+  sum_list (zeckendorf n) = n.
 Proof.
   intro n.
-  (* Apply zeckendorf_acc_sum to get sum(zeckendorf n []) = sum([]) + n *)
-  assert (H: sum_list (zeckendorf n []) = sum_list [] + n).
+  (* Apply zeckendorf_acc_sum to get sum(zeckendorf n) = sum([]) + n *)
+  assert (H: sum_list (zeckendorf n) = sum_list [] + n).
   { apply zeckendorf_acc_sum. }
   (* Simplify: sum([]) = 0, so result is n *)
   simpl in H. exact H.
@@ -1456,7 +1458,7 @@ Qed.
   consecutive Fibs since it's empty).
 *)
 Theorem zeckendorf_no_consecutive : forall n,
-  no_consecutive_fibs (zeckendorf n []).
+  no_consecutive_fibs (zeckendorf n).
 Proof.
   intro n.
   unfold zeckendorf.
@@ -1691,16 +1693,15 @@ Qed.
 
 (* Theorem: zeckendorf produces sorted output *)
 Theorem zeckendorf_sorted : forall n,
-  Sorted_dec (zeckendorf n []).
+  Sorted_dec (zeckendorf n).
 Proof.
   intro n.
   unfold zeckendorf.
   apply zeckendorf_fuel_sorted_empty.
 Qed.
 
-Definition zeckendorf_repr_exists := fun n => is_zeckendorf_repr n (zeckendorf n []).
-
-Theorem zeckendorf_repr_exists_proof : forall n, zeckendorf_repr_exists n.
+Theorem zeckendorf_repr_exists : forall n,
+  is_zeckendorf_repr n (zeckendorf n).
 Proof.
   intro n.
   unfold is_zeckendorf_repr.
@@ -2334,19 +2335,16 @@ Proof.
   exists k. split. exact Hk_ge. symmetry. exact Hfib_k.
 Qed.
 
-Definition zeckendorf_repr_unique := fun n => forall l,
+Theorem zeckendorf_repr_unique : forall n l,
   is_zeckendorf_repr n l ->
-  l = zeckendorf n [].
-
-Theorem zeckendorf_repr_unique_proof : forall n, zeckendorf_repr_unique n.
+  l = zeckendorf n.
 Proof.
   intros n l Hl.
-  unfold zeckendorf_repr_unique in *.
   (* Get the properties from is_zeckendorf_repr *)
   destruct Hl as [Hfib_l [Hsum_l [Hnocons_l Hsorted_l]]].
-  (* Get the properties for zeckendorf n [] *)
-  assert (Hz: is_zeckendorf_repr n (zeckendorf n [])).
-  { apply zeckendorf_repr_exists_proof. }
+  (* Get the properties for zeckendorf n *)
+  assert (Hz: is_zeckendorf_repr n (zeckendorf n)).
+  { apply zeckendorf_repr_exists. }
   destruct Hz as [Hfib_z [Hsum_z [Hnocons_z Hsorted_z]]].
   (* Apply zeckendorf_unique_sorted *)
   apply zeckendorf_unique_sorted with (n := n).
@@ -2358,18 +2356,19 @@ Proof.
   - exact Hnocons_z.
   - apply (zeckendorf_repr_fib_indices_ge_2 l n).
     split; [|split; [|split]]; assumption.
-  - apply (zeckendorf_repr_fib_indices_ge_2 (zeckendorf n []) n).
+  - apply (zeckendorf_repr_fib_indices_ge_2 (zeckendorf n) n).
     split; [|split; [|split]]; assumption.
   - exact Hsum_l.
   - exact Hsum_z.
 Qed.
 
-
-Definition zeckendorfs_theorem := forall n, zeckendorf_repr_exists n /\ zeckendorf_repr_unique n.
-
-Theorem zeckendorfs_theorem_proof : zeckendorfs_theorem.
+Theorem zeckendorf_exists_unique : forall n,
+  is_zeckendorf_repr n (zeckendorf n) /\
+  (forall l, is_zeckendorf_repr n l -> l = zeckendorf n).
 Proof.
+  intro n.
   split.
-  -apply zeckendorf_repr_exists_proof.
-  -apply zeckendorf_repr_unique_proof.
+  - apply zeckendorf_repr_exists.
+  - intros l Hl.
+    apply zeckendorf_repr_unique; assumption.
 Qed.
