@@ -172,18 +172,17 @@ Proof.
   destruct (zeck_lists_invariant n) as [Hsum Hinvar].
   assert (Hlen: k < length (zeck_lists n)).
   { rewrite <- (map_length sum_list (zeck_lists n)).
-    rewrite Hsum. simpl. admit. }
+    rewrite Hsum. rewrite seq_length. exact Hlt. }
   assert (Hsum_k: sum_list (nth k (zeck_lists n) []) = k).
-  { admit.
-    (* rewrite <- (nth_map sum_list (zeck_lists n) [] 0) by assumption.
+  { rewrite <- (map_nth sum_list) by assumption.
     rewrite Hsum.
-    apply nth_seq_0. lia. *) }
+    apply nth_seq_0. assumption. }
   assert (Hin: In (nth k (zeck_lists n) []) (zeck_lists n)).
   { apply nth_In. assumption. }
   specialize (Hinvar _ Hin) as [[Hfib [Hsum_prop [Hnocons Hsorted]]] Hbnd].
   rewrite Hsum_k in Hsum_prop.
   repeat split; try assumption.
-Admitted.
+Qed.
 
 (* TODO(codex): Simple arithmetic identity.
    - Split on m=0 separately.
