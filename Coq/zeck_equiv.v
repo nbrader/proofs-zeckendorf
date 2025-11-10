@@ -235,7 +235,13 @@ Proof. Admitted.
    - For m+1>=1, use the reasoning that pred(S m) = m and unfold fib definitions. *)
 Lemma fib_pred_plus_two : forall m,
   fib (Nat.pred m + 2) = fib (m + 1).
-Proof. Admitted.
+Proof.
+  intro m.
+  destruct m as [|m']; simpl; auto.
+  assert (H : m' + 2 = S m' + 1) by lia.
+  rewrite H.
+  reflexivity.
+Qed.
 
 (* TODO(codex): Prove this by induction on the budget [b].
    - Base case: once k caught up to n+1 we know fib(n+2) > n.
