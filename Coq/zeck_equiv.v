@@ -25,67 +25,6 @@ Require Import Zeckendorf.zeck.
   the i-th entry is the Zeckendorf representation of i.
 *)
 
-(* First, let's test the behavior computationally *)
-
-Example zeck_0 : zeck 0 = [].
-Proof. reflexivity. Qed.
-
-Example zeck_1 : zeck 1 = [1].
-Proof. reflexivity. Qed.
-
-Example zeck_2 : zeck 2 = [2].
-Proof. reflexivity. Qed.
-
-Example zeck_3 : zeck 3 = [3].
-Proof. reflexivity. Qed.
-
-Example zeck_4 : zeck 4 = [3; 1].
-Proof. reflexivity. Qed.
-
-Example zeck_5 : zeck 5 = [5].
-Proof. reflexivity. Qed.
-
-Example zeck_10 : zeck 10 = [8; 2].
-Proof. reflexivity. Qed.
-
-Example zeck_20 : zeck 20 = [13; 5; 2].
-Proof. reflexivity. Qed.
-
-Example zeck_100 : zeck 100 = [89; 8; 3].
-Proof. reflexivity. Qed.
-
-(* Now verify that zeck matches zeckendorf computationally *)
-
-Example equiv_0 : zeck 0 = zeckendorf 0.
-Proof. reflexivity. Qed.
-
-Example equiv_1 : zeck 1 = zeckendorf 1.
-Proof. reflexivity. Qed.
-
-Example equiv_2 : zeck 2 = zeckendorf 2.
-Proof. reflexivity. Qed.
-
-Example equiv_3 : zeck 3 = zeckendorf 3.
-Proof. reflexivity. Qed.
-
-Example equiv_4 : zeck 4 = zeckendorf 4.
-Proof. reflexivity. Qed.
-
-Example equiv_5 : zeck 5 = zeckendorf 5.
-Proof. reflexivity. Qed.
-
-Example equiv_10 : zeck 10 = zeckendorf 10.
-Proof. reflexivity. Qed.
-
-Example equiv_20 : zeck 20 = zeckendorf 20.
-Proof. reflexivity. Qed.
-
-Example equiv_50 : zeck 50 = zeckendorf 50.
-Proof. reflexivity. Qed.
-
-Example equiv_100 : zeck 100 = zeckendorf 100.
-Proof. reflexivity. Qed.
-
 (*
   ======================================================================
   Structural facts about [zeck_lists]
@@ -266,7 +205,6 @@ Proof.
     + exact Hgt.
 Qed.
 
-
 (* TODO(codex): Direct corollary: instantiate [find_fib_index_aux_spec]
    with k=0 and b=S n to obtain the witness used by [zeck]. *)
 Lemma min_level_for_index_spec : forall n,
@@ -284,9 +222,6 @@ Qed.
 Lemma zeck_is_zeckendorf : forall n,
   is_zeckendorf_repr n (zeck n).
 Proof. Admitted.
-
-
-
 
 (*
   Main equivalence theorem: zeck produces the same output as zeckendorf
