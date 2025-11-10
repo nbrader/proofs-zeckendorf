@@ -722,6 +722,35 @@ Fixpoint no_consecutive_fibs (l : list nat) : Prop :=
     no_consecutive_fibs xs
   end.
 
+(* Helper lemma: if no_consecutive_fibs l and fib i, fib j both appear in l
+   with consecutive indices, that is a contradiction. We require fib i <> fib j
+   to avoid the fib 1 = fib 2 = 1 edge case. *)
+Lemma no_consecutive_both_in : forall l i j,
+  no_consecutive_fibs l ->
+  fib i <> fib j ->
+  In (fib i) l ->
+  In (fib j) l ->
+  nat_consecutive i j ->
+  False.
+Proof.
+  induction l as [|x xs IH]; intros i j Hnocons Hneq Hi Hj Hcons.
+  - simpl in Hi. contradiction.
+  - simpl in Hnocons. destruct Hnocons as [Hhead Htail].
+    simpl in Hi, Hj.
+    destruct Hi as [Hi | Hi]; destruct Hj as [Hj | Hj].
+    + subst. contradiction.
+    + apply (Hhead (fib j) Hj i j).
+      * symmetry. exact Hi.
+      * reflexivity.
+      * exact Hcons.
+    + apply (Hhead (fib i) Hi j i).
+      * symmetry. exact Hj.
+      * reflexivity.
+      * unfold nat_consecutive in *.
+        destruct Hcons as [H|H]; [right|left]; lia.
+    + apply (IH _ _ Htail Hneq Hi Hj Hcons).
+Qed.
+
 (*
   Helper lemma: For k >= 2, fib(k) + fib(k-1) = fib(k+1)
 
@@ -965,8 +994,24 @@ Proof.
       assert (H2: fib (j' - 1) < fib j').
       { replace j' with (S (j' - 1)) at 2 by lia.
         apply fib_mono. right. assumption. }
-      (* Combine by transitivity *)
-      lia.
+  (* Combine by transitivity *)
+  lia.
+Qed.
+
+(* Injectivity: equal Fibonacci values imply equal indices (for i,j >= 2) *)
+Lemma fib_injective : forall i j,
+  i >= 2 -> j >= 2 -> fib i = fib j -> i = j.
+Proof.
+  intros i j Hi Hj Heq.
+  destruct (Nat.lt_trichotomy i j) as [Hlt | [Heqij | Hgt]].
+  - exfalso.
+    assert (Hfib_lt: fib i < fib j) by (apply fib_mono_lt; assumption).
+    lia.
+  - exact Heqij.
+  - exfalso.
+    assert (Hfib_lt: fib j < fib i).
+    { apply fib_mono_lt; try assumption; lia. }
+    lia.
 Qed.
 
 (* Helper lemma: Fibonacci numbers grow at least linearly for n >= 5 *)
@@ -1448,6 +1493,40 @@ Definition is_zeckendorf_repr (n : nat) (l : list nat) : Prop :=
   no_consecutive_fibs l /\
   Sorted_dec l.
 
+(* If z is a Fibonacci number strictly between fib(k-2) and fib k, it must have
+   index at most k-2. This is useful to keep track of the "current maximum
+   index" when peeling elements off the list. *)
+Lemma fib_index_bound : forall z k,
+  k >= 3 ->
+  (exists i, i >= 2 /\ fib i = z) ->
+  z < fib k ->
+  z <> fib (k - 1) ->
+  exists i, i >= 2 /\ i <= k - 2 /\ fib i = z.
+Proof.
+  intros z k Hk_ge [i [Hi_ge Heq_i]] Hz_lt Hz_neq.
+  destruct (lt_eq_lt_dec i (k - 1)) as [[Hi_lt | Hi_eq] | Hi_gt].
+  - exists i. repeat split; try assumption; lia.
+  - exfalso. apply Hz_neq. rewrite <- Heq_i, Hi_eq. reflexivity.
+  - assert (Hi_ge_k: i >= k) by lia.
+    assert (Hfib_ge: fib i >= fib k).
+    { destruct (Nat.eq_dec i k) as [Heq|Hneq].
+      - subst. apply Nat.le_refl.
+      - assert (Hi_gt_k: i > k) by lia.
+        apply Nat.lt_le_incl. apply fib_mono_lt; try lia. }
+    rewrite Heq_i in Hfib_ge. lia.
+Qed.
+
+(* Any Fibonacci number with value >= 2 comes from an index >= 2. *)
+Lemma fib_ge_2_index : forall z,
+  z >= 2 ->
+  (exists k, z = fib k) ->
+  exists i, i >= 2 /\ fib i = z.
+Proof.
+  intros z Hz_ge [k Hfib_k].
+  destruct k as [|[|k']] ; simpl in Hfib_k; subst z; try lia.
+  exists (S (S k')). split; [lia|reflexivity].
+Qed.
+
 (*
   ==============================================================================
   KEY LEMMA FOR UNIQUENESS
@@ -1874,12 +1953,13 @@ Lemma sum_nonconsec_fibs_bounded_sorted : forall k xs,
   k >= 2 ->
   Sorted_dec (fib k :: xs) ->
   no_consecutive_fibs_sorted (fib k :: xs) ->
+  no_consecutive_fibs (fib k :: xs) ->
   (forall x, In x (fib k :: xs) -> exists i, i >= 2 /\ fib i = x) ->
   sum_list (fib k :: xs) < fib (S k).
 Proof.
   intros k xs Hk_ge. revert xs.
   induction k as [k IHk] using lt_wf_ind.
-  intros xs Hsorted Hnocons Hfib.
+  intros xs Hsorted Hnocons Hnocons_gen Hfib.
 
   (* Base case: k = 2 *)
   destruct k as [|[|k'']].
@@ -1968,46 +2048,26 @@ Proof.
       assert (Hrecur: fib (S (S (S (S k''')))) =
                       fib (S (S (S k'''))) + fib (S (S k'''))).
       { apply fib_recurrence. lia. }
-      rewrite Hrecur.
 
       (* Goal: fib k + sum_list xs < fib k + fib (k-1) *)
       (* Equivalently: sum_list xs < fib (k-1) *)
 
-      (* Key insight: fib (k-1) is NOT in xs *)
-      (* Proof: If fib (k-1) were in xs, since xs is the tail of a sorted list
-         starting with fib k, and no_consecutive_fibs_sorted checks adjacent pairs,
-         we'd have fib k and fib (k-1) adjacent, which violates no_consecutive *)
+      set (head_val := fib (S (S (S k''')))) in *.
+      (* Use the general no_consecutive hypothesis to forbid fib(k-1) in the tail *)
+      assert (Hnocons_full := Hnocons_gen).
+      simpl in Hnocons_full.
+      destruct Hnocons_full as [Hhead_general Htail_general].
 
       assert (Hk_minus_1_not_in: ~In (fib (S (S k'''))) xs).
       { intro Hin.
-        (* fib (k-1) is in xs *)
-        (* If xs is non-empty and fib (k-1) is at the head, we get a contradiction *)
-        destruct xs as [|y ys].
-        - (* xs = [] *)
-          simpl in Hin. contradiction.
-        - (* xs = y :: ys *)
-          (* Now we can analyze where fib (k-1) appears *)
-          simpl in Hin. destruct Hin as [Hy_eq | Hy_in].
-          + (* y = fib (k-1), so fib k and fib (k-1) are adjacent in the list *)
-            (* Extract the no_consecutive property for adjacent elements *)
-            simpl in Hnocons. destruct Hnocons as [Hno_adj _].
-            (* Hno_adj: forall i j, fib i = fib k -> fib j = y -> ~nat_consecutive i j *)
-            apply (Hno_adj (S (S (S k'''))) (S (S k'''))); try reflexivity.
-            * rewrite Hy_eq. reflexivity.
-            * unfold nat_consecutive. right. reflexivity.
-          + (* fib (k-1) is deeper in xs = y :: ys, not adjacent to fib k *)
-            (* Use sorted_fibs_no_consecutive_gap to show this is impossible *)
-            exfalso.
-            eapply (sorted_fibs_no_consecutive_gap (S (S (S k'''))) (S (S k''')) y ys).
-            * lia. (* i >= 2 *)
-            * lia. (* j >= 2 *)
-            * unfold nat_consecutive. right. reflexivity. (* i and j consecutive *)
-            * lia. (* i > j *)
-            * exact Hsorted.
-            * simpl. right. exact Hy_in. (* fib j in y :: ys *)
-            * exact Hfib. (* all elements are Fibonacci numbers *)
-            * simpl in Hnocons. exact Hnocons. (* no consecutive fibs in sorted list *)
-          }
+        apply (no_consecutive_both_in (head_val :: xs) (S (S (S k'''))) (S (S k'''))).
+        - exact (conj Hhead_general Htail_general).
+        - assert (Hfib_lt: fib (S (S k''')) < fib (S (S (S k''')))).
+          { apply fib_mono_lt; lia. }
+          lia.
+        - simpl. left. reflexivity.
+        - simpl. right. exact Hin.
+        - unfold nat_consecutive. right. reflexivity. }
 
       (* Now we know fib (k-1) is NOT in xs *)
       (* We want to show: sum_list xs < fib (k-1) *)
@@ -2018,331 +2078,72 @@ Proof.
         (* Goal: fib k + sum_list [] < fib k + fib (k-1) *)
         (* sum_list [] = 0, so this is: fib k + 0 < fib k + fib (k-1) *)
         (* Use monotonicity of addition *)
+        subst head_val.
+        rewrite Hrecur.
         simpl (sum_list []).
         apply Nat.add_lt_mono_l.
         apply fib_pos. lia.
       * (* xs = y :: ys, so the original list is fib k :: y :: ys *)
-        (* y < fib k (since sorted) *)
         assert (Hy_lt_k: y < fib (S (S (S k''')))).
         { eapply sorted_tail_lt.
           - exact Hsorted.
           - simpl. left. reflexivity. }
 
-        (* Since y is a Fibonacci number, y < fib k, and y <> fib (k-1),
-           by monotonicity, y <= fib (k-2) *)
-
-        (* First, assert y is a Fibonacci number *)
         assert (Hy_fib: exists i, i >= 2 /\ fib i = y).
         { apply Hfib. simpl. right. left. reflexivity. }
 
-        (* Assert y <> fib (k-1) from Hk_minus_1_not_in *)
         assert (Hy_neq_k_minus_1: y <> fib (S (S k'''))).
-        { intro Heq. apply Hk_minus_1_not_in. rewrite <- Heq. simpl. left. reflexivity. }
+        { intro Heq. apply Hk_minus_1_not_in. simpl. left. exact Heq. }
 
-        (* Use fib_gap_property *)
-        assert (Hy_le_k_minus_2: y <= fib (S (S k''') - 1)).
-        { apply (fib_gap_property (S (S (S k'''))) y).
-          - lia.
-          - exact Hy_fib.
-          - exact Hy_lt_k.
-          - simpl. exact Hy_neq_k_minus_1. }
+        destruct (fib_index_bound y (S (S (S k''')))) as [i [Hi_ge [Hi_le Heq_i]]].
+        { lia. }
+        { exact Hy_fib. }
+        { exact Hy_lt_k. }
+        { exact Hy_neq_k_minus_1. }
 
-        (* Now we need to apply IH to y :: ys to show sum_list (y :: ys) < fib(k-1) *)
-        (* Extract the index j such that fib j = y *)
-        destruct Hy_fib as [j [Hj_ge Heq_j]].
+        assert (Hsorted_tail: Sorted_dec (y :: ys)).
+        { apply (sorted_tail (fib (S (S (S k'''))))). exact Hsorted. }
+        assert (Hsorted_tail_rewrite: Sorted_dec (fib i :: ys)).
+        { rewrite Heq_i. exact Hsorted_tail. }
+        assert (Hnocons_sorted_tail: no_consecutive_fibs_sorted (y :: ys)).
+        { destruct ys as [|z zs].
+          - simpl. exact I.
+          - simpl in Hnocons. destruct Hnocons as [_ Htail_sorted]. exact Htail_sorted. }
+        assert (Hnocons_sorted_rewrite: no_consecutive_fibs_sorted (fib i :: ys)).
+        { rewrite Heq_i. exact Hnocons_sorted_tail. }
+        assert (Hnocons_general_tail: no_consecutive_fibs (y :: ys)).
+        { exact Htail_general. }
+        assert (Hnocons_general_rewrite: no_consecutive_fibs (fib i :: ys)).
+        { rewrite Heq_i. exact Hnocons_general_tail. }
 
-        (* Show j <= k-2 using monotonicity *)
-        assert (Hj_le_k_minus_2: j <= S k''').
-        { (* We have y = fib j and y <= fib (k-2) = fib (S (S k''') - 1) *)
-          (* Simplify fib (S (S k''') - 1) = fib (S k''') *)
-          assert (Hy_le_simp: y <= fib (S k''')).
-          { assert (Heq_minus: S (S k''') - 1 = S k''') by lia.
-            rewrite Heq_minus in Hy_le_k_minus_2.
-            exact Hy_le_k_minus_2. }
-          assert (Hfib_j_le: fib j <= fib (S k''')).
-          { rewrite Heq_j. exact Hy_le_simp. }
-          (* Hfib_j_le: fib j <= fib (S k''') *)
-          (* Use case analysis on k''' *)
-          destruct k''' as [|k''''].
-          - (* k''' = 0: k = 3, k-2 = 1, so fib j <= fib 1 = 1 *)
-            (* fib 0 = 0, fib 1 = 1, fib 2 = 1, fib 3 = 2, ... *)
-            (* So fib j <= 1 means j <= 2 (since fib 2 = 1 and fib 3 = 2 > 1) *)
-            assert (Hj_le_2: j <= 2).
-            { destruct j as [|[|[|j']]]; try lia.
-              (* j = S (S (S j')) >= 3: fib 3 = 2 > 1, contradicts fib j <= 1 *)
-              exfalso.
-              assert (Hfib_3: fib 3 = 2) by reflexivity.
-              assert (Hfib_SSS_ge: fib (S (S (S j'))) >= fib 3).
-              { destruct (Nat.eq_dec (S (S (S j'))) 3) as [Heq | Hneq].
-                - rewrite Heq. lia.
-                - assert (Hj_gt: S (S (S j')) > 3) by lia.
-                  apply Nat.lt_le_incl.
-                  apply fib_mono_lt; lia. }
-              lia. }
-            (* S k''' = 1, so we need j <= 1, but we only have j <= 2 *)
-            (* Use the constraint y <> fib (k-1) *)
-            (* k = 3, so k-1 = 2, and fib 2 = 1 *)
-            (* We have fib j <= fib 1 = 1 *)
-            (* Since y = fib j and fib is non-decreasing for j >= 1, *)
-            (* fib j <= 1 means fib j ∈ {0, 1} *)
-            (* fib 0 = 0, fib 1 = 1, fib 2 = 1 *)
-            (* We'll show y > 0 (similar to later proof), so y = 1 *)
-            (* But y <> fib (k-1) = fib 2 = 1, contradiction *)
-            exfalso.
-            (* Show y > 0 *)
-            assert (Hy_pos: y > 0).
-            { destruct (Nat.eq_dec y 0) as [Heq0 | Hneq0].
-              - (* y = 0, derive contradiction *)
-                destruct ys as [|z zs].
-                + (* ys = []: y = 0 = fib j, but j >= 2, so fib j >= fib 2 = 1 > 0, contradiction *)
-                  exfalso.
-                  (* j >= 2, so fib j >= fib 2 = 1, hence y >= 1 *)
-                  assert (Hy_ge: y >= 1).
-                  { rewrite <- Heq_j.
-                    destruct (Nat.eq_dec j 2) as [Heq2 | Hneq2].
-                    - rewrite Heq2. simpl. lia.
-                    - assert (Hj_gt: j > 2) by lia.
-                      (* fib 2 < fib j since 2 < j *)
-                      assert (Hfib_lt: fib 2 < fib j).
-                      { apply fib_mono_lt; lia. }
-                      simpl in Hfib_lt. lia. }
-                  (* But y = 0, contradicting y >= 1 *)
-                  lia.
-                + (* ys = z :: zs: z < 0, contradiction *)
-                  exfalso.
-                  assert (Hz_lt: z < 0).
-                  { assert (Hsorted_y_ys: Sorted_dec (0 :: z :: zs)).
-                    { apply (sorted_tail (fib (S (S (S 0))))).
-                      rewrite Heq0 in Hsorted. exact Hsorted. }
-                    simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [H0z _].
-                    exact H0z. }
-                  assert (Hz_fib: exists i, i >= 2 /\ fib i = z).
-                  { apply Hfib. simpl. right. right. left. reflexivity. }
-                  destruct Hz_fib as [i_z [Hi_z_ge Heq_iz]].
-                  lia.
-              - lia. }
-            (* Now, y = fib j, fib j <= fib 1 = 1, and y > 0 *)
-            (* So y <= 1 and y > 0, thus y = 1 *)
-            assert (Hfib_1: fib 1 = 1) by reflexivity.
-            assert (Hy_le_1: y <= 1).
-            { rewrite <- Heq_j. rewrite Hfib_1 in Hfib_j_le. exact Hfib_j_le. }
-            assert (Hy_eq_1: y = 1) by lia.
-            (* But y <> fib (k-1) = fib 2 = 1 *)
-            assert (Hfib_k_minus_1: fib 2 = 1) by reflexivity.
-            rewrite Hy_eq_1 in Hy_neq_k_minus_1.
-            rewrite Hfib_k_minus_1 in Hy_neq_k_minus_1.
-            (* k = 3, so S (S k''') = S (S 0) = 2 *)
-            assert (Hk_eq_3: S (S (S 0)) = 3) by reflexivity.
-            (* Hy_neq_k_minus_1: y <> fib (S (S 0)), i.e., 1 <> fib 2 = 1 *)
-            exfalso. apply Hy_neq_k_minus_1. reflexivity.
-          - (* k''' >= 1: S k''' >= 2, so we can use fib_mono_lt *)
-            destruct (Nat.le_gt_cases j (S (S k''''))) as [Hle | Hgt]; [exact Hle |].
-            exfalso.
-            assert (Hfib_gt: fib j > fib (S (S k''''))).
-            { (* First show j >= 2 *)
-              assert (Hj_ge_2_local: j >= 2).
-              { (* Show y > 0, then j ≠ 0, 1 *)
-                assert (Hy_pos: y > 0).
-                { destruct (Nat.eq_dec y 0) as [Heq0 | Hneq0].
-                  - destruct ys as [|z zs].
-                    + (* y = 0 = fib j, but j >= 2, so fib j >= 1, contradiction *)
-                      exfalso.
-                      assert (Hy_ge: y >= 1).
-                      { rewrite <- Heq_j.
-                        destruct (Nat.eq_dec j 2) as [Heq2 | Hneq2].
-                        - rewrite Heq2. simpl. lia.
-                        - assert (Hj_gt: j > 2) by lia.
-                          assert (Hfib_lt: fib 2 < fib j).
-                          { apply fib_mono_lt; lia. }
-                          simpl in Hfib_lt. lia. }
-                      lia.
-                    + exfalso.
-                      assert (Hz_lt: z < 0).
-                      { assert (Hsorted_y_ys: Sorted_dec (0 :: z :: zs)).
-                        { apply (sorted_tail (fib (S (S (S (S k'''')))))).
-                          rewrite Heq0 in Hsorted. exact Hsorted. }
-                        simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [H0z _].
-                        exact H0z. }
-                      assert (Hz_fib: exists i, i >= 2 /\ fib i = z).
-                      { apply Hfib. simpl. right. right. left. reflexivity. }
-                      destruct Hz_fib as [i_z [Hi_z_ge Heq_iz]].
-                      lia.
-                  - lia. }
-                destruct j as [|[|j']].
-                - exfalso. rewrite <- Heq_j in Hy_pos. simpl in Hy_pos. lia.
-                - (* j = 1, but Hj_ge : j >= 2, contradiction *)
-                  exfalso. lia.
-                - lia. }
-              apply fib_mono_lt.
-              - lia.                    (* S (S k'''') >= 2 *)
-              - exact Hj_ge_2_local.    (* j >= 2 *)
-              - exact Hgt.              (* S (S k'''') < j *) }
-            lia. }
+        assert (Hfib_tail: forall z, In z (fib i :: ys) -> exists j, j >= 2 /\ fib j = z).
+        { intros z Hz.
+          apply Hfib. simpl. right.
+          simpl in Hz. destruct Hz as [Hz_eq | Hz_in].
+          - left. rewrite <- Heq_i. exact Hz_eq.
+          - right. exact Hz_in. }
 
-        (* Show j >= 2 *)
-        assert (Hj_ge_2: j >= 2).
-        { (* Strategy: Show y > 0, then handle j = 0 and j = 1 cases *)
-          (* First show y > 0 *)
-          assert (Hy_pos: y > 0).
-          { (* Since the list is sorted and fib k is at the head, we have y < fib k *)
-            (* k = S (S (S k''')), so fib k >= fib 3 = 2 *)
-            (* If ys is non-empty, then there exists an element below y *)
-            (* All elements are Fibonacci numbers, and the only Fibonacci number <= 0 is fib 0 = 0 *)
-            (* But if y = 0, then ys would contain elements < 0, which is impossible *)
-            (* So y > 0 *)
-            destruct (Nat.eq_dec y 0) as [Heq0 | Hneq0].
-            - (* y = 0 *)
-              exfalso.
-              (* If y = 0, and ys is non-empty, let z be an element of ys *)
-              destruct ys as [|z zs].
-              + (* ys = [], so list is [fib k, 0] *)
-                (* sum = fib k + 0 = fib k < fib (S k) is what we need to prove *)
-                (* But this contradicts our context - we're in the case where xs = y :: ys *)
-                (* Actually, this is fine - sum = fib k + 0 < fib k + fib (k-1) holds *)
-                (* Let me reconsider the context... *)
-                (* We have Hy_lt_k: y < fib k, and y = 0, so 0 < fib k, which is true *)
-                (* The issue is whether y = 0 can appear in a Zeckendorf representation *)
-                (* Actually, 0 = fib 0, and in Zeckendorf reps, we typically start from fib 2 = 1 *)
-                (* The lemma hypothesis says all elements are Fibonacci numbers, not which indices *)
-                (* Let me try a different approach: use no_consecutive_fibs_sorted *)
-                (* If y = 0 = fib 0, then either ys = [] or ys starts with some z < 0 *)
-                (* But Fibonacci numbers are all >= 0, so z < 0 is impossible *)
-                (* y = 0 = fib j, but j >= 2, so fib j >= 1, contradiction *)
-                assert (Hy_ge: y >= 1).
-                { rewrite <- Heq_j.
-                  destruct (Nat.eq_dec j 2) as [Heq2 | Hneq2].
-                  - rewrite Heq2. simpl. lia.
-                  - assert (Hj_gt: j > 2) by lia.
-                    assert (Hfib_lt: fib 2 < fib j).
-                    { apply fib_mono_lt; lia. }
-                    simpl in Hfib_lt. lia. }
-                lia.
-              + (* ys = z :: zs, so z < y = 0, thus z < 0 *)
-                (* But z is a Fibonacci number, so z >= 0, contradiction *)
-                assert (Hz_lt: z < 0).
-                { assert (Hsorted_y_ys: Sorted_dec (0 :: z :: zs)).
-                  { apply (sorted_tail (fib (S (S (S k'''))))).
-                    rewrite Heq0 in Hsorted. exact Hsorted. }
-                  simpl in Hsorted_y_ys. destruct Hsorted_y_ys as [H0z _].
-                  exact H0z. }
-                (* z is a Fibonacci number *)
-                assert (Hz_fib: exists i, i >= 2 /\ fib i = z).
-                { apply Hfib. simpl. right. right. left. reflexivity. }
-                (* But Fibonacci numbers are >= 0 *)
-                destruct Hz_fib as [i_z [Hi_z_ge Heq_iz]].
-                (* fib i_z >= 0, but z = fib i_z < 0, contradiction *)
-                lia.
-            - (* y <> 0, so y > 0 since y is a nat *)
-              lia. }
+        assert (Hsum_tail: sum_list (y :: ys) < fib (S i)).
+        { rewrite <- Heq_i at 1.
+          apply (IHk i); try lia.
+          - exact Hsorted_tail_rewrite.
+          - exact Hnocons_sorted_rewrite.
+          - exact Hnocons_general_rewrite.
+          - exact Hfib_tail. }
 
-          (* Now handle j = 0, 1 cases *)
-          destruct j as [|[|j']].
-          - (* j = 0: y = fib 0 = 0, contradicts Hy_pos *)
-            exfalso. rewrite <- Heq_j in Hy_pos. simpl in Hy_pos. lia.
-          - (* j = 1, but Hj_ge : j >= 2, contradiction *)
-            exfalso. lia.
-          - (* j = S (S j') >= 2 *)
-            lia. }
+        assert (Hfib_bound: fib (S i) <= fib (S (S k'''))).
+        { destruct (Nat.eq_dec (S i) (S (S k'''))) as [Heq | Hneq].
+          - rewrite Heq. apply Nat.le_refl.
+          - assert (S i < S (S k''')) by lia.
+            apply Nat.lt_le_incl. apply fib_mono_lt; try lia. }
+        assert (Hsum_tail_bound: sum_list (y :: ys) < fib (S (S k'''))) by
+          (apply (Nat.lt_le_trans _ (fib (S i))); assumption).
 
-        (* Apply IH with m = j *)
-        assert (Hsum_bound: sum_list (y :: ys) < fib (S j)).
-        { rewrite <- Heq_j at 1.
-          apply (IHk j).
-          - (* j < k: We have j <= k-2 = S k''' and k = S (S (S k''')), so j <= S k''' < S (S (S k''')) *)
-            lia.
-          - exact Hj_ge_2.
-          - (* Sorted_dec (fib j :: ys): from Sorted_dec (fib k :: y :: ys) and y = fib j *)
-            (* Sorted_dec (fib k :: y :: ys) gives us Sorted_dec (y :: ys) *)
-            assert (Hsorted_y_ys: Sorted_dec (y :: ys)).
-            { apply (sorted_tail (fib (S (S (S k'''))))).
-              exact Hsorted. }
-            (* Now rewrite y to fib j using Heq_j: fib j = y *)
-            rewrite <- Heq_j in Hsorted_y_ys.
-            exact Hsorted_y_ys.
-          - (* no_consecutive_fibs_sorted (fib j :: ys) *)
-            (* Get no_consecutive_fibs_sorted (y :: ys) from original list *)
-            assert (Hnocons_y_ys: no_consecutive_fibs_sorted (y :: ys)).
-            { destruct ys as [|z zs].
-              + (* ys = [], so property is trivially True *)
-                simpl. exact I.
-              + (* ys = z :: zs *)
-                (* From no_consecutive_fibs_sorted (fib k :: y :: z :: zs), we get:
-                   - fib k and y are not consecutive
-                   - no_consecutive_fibs_sorted (y :: z :: zs) *)
-                simpl in Hnocons. destruct Hnocons as [_ Htail].
-                exact Htail. }
-            (* Now rewrite y = fib j *)
-            rewrite <- Heq_j in Hnocons_y_ys.
-            exact Hnocons_y_ys.
-          - (* All elements are Fibonacci numbers: (fib j :: ys) is a sublist of (fib k :: y :: ys) *)
-            intros z Hz.
-            apply Hfib.
-            simpl. right.
-            simpl in Hz. destruct Hz as [Hz_eq | Hz_in].
-            + left. rewrite <- Heq_j. exact Hz_eq.
-            + right. exact Hz_in. }
-
-        (* We want to show: sum_list (y :: ys) < fib (k-1) = fib (S (S k''')) *)
-        (* We have: sum_list (y :: ys) < fib (S j) from IH *)
-        (* We need: fib (S j) <= fib (S (S k''')) *)
-
-        (* First show j < k-1 = S (S k''') *)
-        assert (Hj_lt_k_minus_1: j < S (S k''')).
-        { (* We have y = fib j and y <= fib (k-2) = fib (S k''') < fib (k-1) = fib (S (S k''')) *)
-          (* First show fib (S k''') < fib (S (S k''')) *)
-          assert (Hfib_mono_step: fib (S k''') < fib (S (S k'''))).
-          { destruct k''' as [|k''''].
-            - (* k''' = 0: fib 1 < fib 2, which is 1 < 1, false! *)
-              (* Actually fib 1 = 1 and fib 2 = 1, so fib 1 = fib 2 *)
-              (* This means when k = 3, we have k-2 = 1 and k-1 = 2, and fib 1 = fib 2 *)
-              (* So fib (k-2) = fib (k-1), which contradicts strict inequality *)
-              (* But we need < not <=. Let me check the property *)
-              (* Actually fib is: 0,1,1,2,3,5,... so fib 1 = fib 2 = 1 *)
-              (* So fib (S 0) = fib (S (S 0)) is false *)
-              (* This suggests k''' = 0 case needs special handling *)
-              simpl. lia. (* 1 < 1 is false, so this will fail *)
-            - (* k''' >= 1: fib (S (S k'''')) < fib (S (S (S k''''))), can use fib_mono *)
-              apply fib_mono. lia. }
-          (* From fib j <= fib (S k''') < fib (S (S k''')), we get fib j < fib (S (S k''')) *)
-          assert (Hfib_j_lt: fib j < fib (S (S k'''))).
-          { (* We have fib j <= fib (S k''') from earlier and fib (S k''') < fib (S (S k''')) *)
-            (* But we don't have access to Hfib_j_le here, so recompute *)
-            assert (Hy_le: y <= fib (S k''')).
-            { assert (Heq_minus: S (S k''') - 1 = S k''') by lia.
-              rewrite Heq_minus in Hy_le_k_minus_2.
-              exact Hy_le_k_minus_2. }
-            rewrite <- Heq_j in Hy_le.
-            lia. }
-          (* By monotonicity, j < S (S k''') *)
-          destruct (Nat.lt_ge_cases j (S (S k'''))) as [Hlt | Hge]; [exact Hlt |].
-          exfalso.
-          (* If j >= S (S k'''), then fib j >= fib (S (S k''')) by monotonicity *)
-          assert (Hfib_j_ge: fib j >= fib (S (S k'''))).
-          { (* We have j >= S (S k''') from Hge, j >= 2 from Hj_ge_2 *)
-            (* Need to show S (S k''') >= 2 *)
-            (* k = S (S (S k''')) >= 3, so S (S k''') = k - 1 >= 2 *)
-            assert (Hk_minus_1_ge: S (S k''') >= 2) by lia.
-            (* Now apply monotonicity *)
-            destruct (Nat.eq_dec j (S (S k'''))) as [Heq | Hneq].
-            - rewrite Heq. lia.
-            - assert (Hj_gt: j > S (S k''')) by lia.
-              apply Nat.lt_le_incl.
-              apply fib_mono_lt; [exact Hk_minus_1_ge | exact Hj_ge_2 | exact Hj_gt]. }
-          lia. }
-
-        (* From j < S (S k'''), we get S j <= S (S k'''), so fib (S j) <= fib (S (S k''')) *)
-        assert (Hfib_Sj_le: fib (S j) <= fib (S (S k'''))).
-        { destruct (Nat.eq_dec (S j) (S (S k'''))) as [Heq | Hneq].
-          - rewrite Heq. lia.
-          - assert (Hlt: S j < S (S k''')) by lia.
-            apply Nat.lt_le_incl.
-            apply fib_mono_lt; try lia. }
-
-        (* Cancel fib k from both sides to get: sum_list (y :: ys) < fib (k-1) *)
+        subst head_val.
+        rewrite Hrecur.
+        simpl.
         apply Nat.add_lt_mono_l.
-        (* Now goal is: sum_list (y :: ys) < fib (S (S k''')) *)
-        (* Combine: sum_list (y :: ys) < fib (S j) <= fib (S (S k''')) *)
-        apply (Nat.lt_le_trans _ (fib (S j))); [exact Hsum_bound | exact Hfib_Sj_le].
+        exact Hsum_tail_bound.
 Qed.
 
 (*
@@ -2365,6 +2166,8 @@ Theorem zeckendorf_unique_sorted : forall n l1 l2,
   Sorted_dec l2 ->
   no_consecutive_fibs_sorted l1 ->
   no_consecutive_fibs_sorted l2 ->
+  no_consecutive_fibs l1 ->
+  no_consecutive_fibs l2 ->
   (forall x, In x l1 -> exists i, i >= 2 /\ fib i = x) ->
   (forall x, In x l2 -> exists i, i >= 2 /\ fib i = x) ->
   sum_list l1 = n ->
@@ -2374,7 +2177,7 @@ Proof.
   intro n.
   (* Induction on n to handle the sum *)
   induction n as [n IHn] using lt_wf_ind.
-  intros l1 l2 Hsorted1 Hsorted2 Hnocons1 Hnocons2 Hfib1 Hfib2 Hsum1 Hsum2.
+  intros l1 l2 Hsorted1 Hsorted2 Hnocons1 Hnocons2 Hnocons1_gen Hnocons2_gen Hfib1 Hfib2 Hsum1 Hsum2.
 
   (* Case split on l1 *)
   destruct l1 as [|x1 xs1].
@@ -2409,6 +2212,8 @@ Proof.
       lia.
 
   - (* l1 = x1 :: xs1 *)
+    simpl in Hnocons1_gen.
+    destruct Hnocons1_gen as [Hnocons1_head Hnocons1_tail].
     destruct l2 as [|x2 xs2].
     + (* l2 = [], but l1 is non-empty with sum n *)
       (* Similar contradiction as above *)
@@ -2433,6 +2238,8 @@ Proof.
 
     + (* Both lists are non-empty: l1 = x1 :: xs1, l2 = x2 :: xs2 *)
       (* Key claim: x1 = x2 (the maximum elements must be equal) *)
+      simpl in Hnocons2_gen.
+      destruct Hnocons2_gen as [Hnocons2_head Hnocons2_tail].
 
       (* First, extract indices for x1 and x2 *)
       assert (Hx1_fib: exists i1, i1 >= 2 /\ fib i1 = x1).
@@ -2460,6 +2267,7 @@ Proof.
             - exact Hi1_ge.
             - rewrite Heq_i1. exact Hsorted1.
             - rewrite Heq_i1. exact Hnocons1.
+            - rewrite Heq_i1. exact (conj Hnocons1_head Hnocons1_tail).
             - intros z Hz. rewrite Heq_i1 in Hz.
               apply Hfib1. exact Hz. }
           (* Also: x2 <= sum_list (x2 :: xs2) (since x2 is in (x2 :: xs2)) *)
@@ -2498,6 +2306,7 @@ Proof.
             - exact Hi2_ge.
             - rewrite Heq_i2. exact Hsorted2.
             - rewrite Heq_i2. exact Hnocons2.
+            - rewrite Heq_i2. exact (conj Hnocons2_head Hnocons2_tail).
             - intros z Hz. rewrite Heq_i2 in Hz.
               apply Hfib2. exact Hz. }
           assert (Hx1_le_sum1: x1 <= sum_list (x1 :: xs1)).
@@ -2548,6 +2357,10 @@ Proof.
       * (* no_consecutive_fibs_sorted xs2 *)
         destruct xs2 as [|y2 ys2]; [simpl; trivial |].
         simpl in Hnocons2. destruct Hnocons2 as [_ Htail]. exact Htail.
+      * (* no_consecutive_fibs xs1 *)
+        exact Hnocons1_tail.
+      * (* no_consecutive_fibs xs2 *)
+        exact Hnocons2_tail.
       * (* All elements in xs1 are Fibs with indices >= 2 *)
         intros z Hz. apply Hfib1. simpl. right. exact Hz.
       * (* All elements in xs2 are Fibs with indices >= 2 *)
@@ -2618,6 +2431,8 @@ Proof.
   - exact Hsorted_z.
   - apply no_consecutive_fibs_to_sorted; assumption.
   - apply no_consecutive_fibs_to_sorted; assumption.
+  - exact Hnocons_l.
+  - exact Hnocons_z.
   - apply (zeckendorf_repr_fib_indices_ge_2 l n).
     split; [|split; [|split]]; assumption.
   - apply (zeckendorf_repr_fib_indices_ge_2 (zeckendorf n []) n).
