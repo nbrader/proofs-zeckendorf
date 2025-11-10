@@ -152,6 +152,38 @@ Lemma zeck_lists_invariant :
       In l (zeck_lists n) ->
       is_zeckendorf_repr (sum_list l) l /\
       (forall z k, In z l -> z = fib k -> k <= n + 1).
+Proof.
+  apply nat_ind2; simpl.
+  - split.
+    + reflexivity.
+    + intros l Hl. destruct Hl as [Hl|[]]; subst l.
+      split.
+      * repeat split; simpl; auto.
+        intros z Hz. inversion Hz.
+      * intros z k Hz _. inversion Hz.
+  - split.
+    + reflexivity.
+    + intros l Hl.
+      destruct Hl as [Hl|Hl']; [subst l|].
+      { split.
+        { split.
+          { intros z Hz. inversion Hz. }
+          split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
+        { intros z k Hz _. inversion Hz. } }
+      destruct Hl' as [Hl|Hempty]; [subst l|destruct Hempty]; admit.
+  - intros n [Hsum_n Hinv_n] [Hsum_Sn Hinv_Sn].
+    split.
+    + admit.
+    + intros l Hl.
+      simpl in Hl.
+      apply in_app_or in Hl.
+      destruct Hl as [Hin1 | Hin2].
+      * specialize (Hinv_Sn _ Hin1) as [Hrepr Hbnd].
+        split; [exact Hrepr|].
+        intros z k Hz Hzfib.
+        specialize (Hbnd z k Hz Hzfib).
+        lia.
+      * admit.
 Admitted.
 
 Corollary zeck_lists_sum_seq : forall n,
