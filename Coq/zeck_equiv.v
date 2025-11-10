@@ -167,7 +167,23 @@ Qed.
 Corollary zeck_lists_entry_repr : forall n k,
   k < fib (n + 2) ->
   is_zeckendorf_repr k (nth k (zeck_lists n) []).
-Proof. Admitted.
+Proof.
+  intros n k Hlt.
+  destruct (zeck_lists_invariant n) as [Hsum Hinvar].
+  assert (Hlen: k < length (zeck_lists n)).
+  { rewrite <- (map_length sum_list (zeck_lists n)).
+    rewrite Hsum. simpl. admit. }
+  assert (Hsum_k: sum_list (nth k (zeck_lists n) []) = k).
+  { admit.
+    (* rewrite <- (nth_map sum_list (zeck_lists n) [] 0) by assumption.
+    rewrite Hsum.
+    apply nth_seq_0. lia. *) }
+  assert (Hin: In (nth k (zeck_lists n) []) (zeck_lists n)).
+  { apply nth_In. assumption. }
+  specialize (Hinvar _ Hin) as [[Hfib [Hsum_prop [Hnocons Hsorted]]] Hbnd].
+  rewrite Hsum_k in Hsum_prop.
+  repeat split; try assumption.
+Admitted.
 
 (* TODO(codex): Simple arithmetic identity.
    - Split on m=0 separately.
@@ -221,7 +237,18 @@ Qed.
    so we must show fib(depth+2) > n, then apply the entry lemma. *)
 Lemma zeck_is_zeckendorf : forall n,
   is_zeckendorf_repr n (zeck n).
-Proof. Admitted.
+Proof.
+  intro n.
+  unfold zeck.
+  set (m := min_level_for_index n).
+  assert (Hbound: n < fib (m - 1 + 2)).
+  { replace (m - 1 + 2) with (Nat.pred m + 2) by lia.
+    rewrite fib_pred_plus_two.
+    apply min_level_for_index_spec.
+  }
+  apply (zeck_lists_entry_repr (m - 1) n).
+  exact Hbound.
+Qed.
 
 (*
   Main equivalence theorem: zeck produces the same output as zeckendorf
