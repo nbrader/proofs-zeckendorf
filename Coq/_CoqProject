@@ -1,2 +1,4 @@
 -Q . Zeckendorf
 zeckendorf.v
+zeck.v
+zeck_equiv.v
