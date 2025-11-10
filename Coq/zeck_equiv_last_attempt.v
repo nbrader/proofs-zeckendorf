@@ -199,13 +199,6 @@ Proof.
     rewrite Heq in Hfib_lt. lia.
 Qed.
 
-(* TODO(codex): Prove this by complete induction on n using [nat_ind2].
-   - Base cases n=0,1 are already unfolded; keep proofs short.
-   - Step case should reuse the invariant for n and n+1, then show
-     the concatenation and mapped block preserve (1) the enumeration
-     of sums and (2) the Zeckendorf predicate + index bounds.
-   - Useful facts already available: [seq_map_shift], [map_sum_cons],
-     monotonicity of fib, and the helper lemmas near the top of this file. *)
 Lemma zeck_lists_invariant :
   forall n,
     map sum_list (zeck_lists n) = seq 0 (fib (n + 2)) /\
@@ -213,7 +206,118 @@ Lemma zeck_lists_invariant :
       In l (zeck_lists n) ->
       is_zeckendorf_repr (sum_list l) l /\
       (forall z k, In z l -> z = fib k -> k <= n + 1).
-Admitted.
+Proof.
+  apply nat_ind2; simpl.
+  - split.
+    + reflexivity.
+    + intros l Hl. destruct Hl as [Hl|[]]; subst l.
+      split.
+      * repeat split; simpl; auto.
+        intros z Hz. inversion Hz.
+      * intros z k Hz _. inversion Hz.
+  - split.
+    + reflexivity.
+    + intros l Hl.
+      destruct Hl as [Hl|Hl']; [subst l|].
+      { split.
+        { split.
+          { intros z Hz. inversion Hz. }
+          split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
+        { intros z k Hz _. inversion Hz. } }
+      { destruct Hl' as [Hl|[]]; [subst l|inversion Hl].
+        - split.
+          { split.
+            { intros z Hz. inversion Hz. }
+            split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
+          { intros z k Hz _. inversion Hz. }
+        - split.
+          { split.
+            { intros z Hz.
+              simpl in Hz. destruct Hz as [Hz|[]]. subst z.
+              exists 2. split; [lia|reflexivity]. }
+            split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
+          { intros z k Hz Hfib.
+            simpl in Hz. destruct Hz as [Hz|[]]; subst z.
+            + destruct k as [|k1]; simpl in Hfib; try lia.
+              destruct k1 as [|k2]; simpl in Hfib; try lia.
+              destruct k2 as [|k3]; simpl in Hfib; try lia.
+              simpl in Hfib.
+              assert (Hpos1 : fib (S (S k3)) > 0) by (apply fib_pos; lia).
+              assert (Hpos2 : fib (S k3) > 0) by (apply fib_pos; lia).
+              assert (Hge1 : fib (S (S k3)) >= 1) by lia.
+              assert (Hge2 : fib (S k3) >= 1) by lia.
+              assert (Hsum_ge : fib (S (S k3)) + fib (S k3) >= 2) by lia.
+              exfalso.
+              rewrite Hfib in Hsum_ge. inversion Hsum_ge.
+            + inversion Hz. } }
+  - intros n [Hsum_n Hinv_n] [Hsum_Sn Hinv_Sn].
+    split.
+    + simpl.
+      rewrite map_app, Hsum_Sn, map_sum_cons, Hsum_n.
+      rewrite seq_map_shift with (len := fib (n + 2)) (start := 0) (offset := fib (n + 3)).
+      rewrite (seq_app 0 (fib (n + 3)) (fib (n + 2))).
+      replace (fib (n + 3) + fib (n + 2)) with (fib (n + 4)).
+      * reflexivity.
+      * replace (n + 4)%nat with (S (S n) + 2)%nat by lia.
+        replace (n + 3)%nat with (S (n + 2)) by lia.
+        rewrite fib_SS. reflexivity.
+    + intros l Hl.
+      simpl in Hl.
+      apply in_app_or in Hl.
+      destruct Hl as [Hin1 | Hin2].
+      * specialize (Hinv_Sn _ Hin1) as [Hrepr Hbnd].
+        split; [exact Hrepr|].
+        intros z k Hz Hzfib.
+        apply Hbnd; assumption.
+      * apply in_map_iff in Hin2.
+        destruct Hin2 as [xs [-> Hxs]].
+        specialize (Hinv_n _ Hxs) as [Hrepr_xs Hbnd_xs].
+        destruct Hrepr_xs as [Hfib_xs [Hsum_xs [Hnocons_xs Hsorted_xs]]].
+        split.
+        -- (* is_zeckendorf_repr for fib (n+3) :: xs *)
+           split.
+           { (* Fib property *)
+             intros z Hz.
+             simpl in Hz. destruct Hz as [Hz|Hz].
+             - subst z. exists (n + 3). split; lia.
+             - apply Hfib_xs in Hz.
+               destruct Hz as [k [Hk_ge Hk_eq]].
+               exists k. split; assumption.
+           }
+           split.
+           { (* Sum property *)
+             simpl. reflexivity.
+           }
+           split.
+           { (* No consecutive property *)
+             simpl. split.
+             - intros y Hy i j Hi Hj Hcons.
+               subst.
+               specialize (Hfib_xs y Hy) as [k [Hk_ge Hk_eq]].
+               pose proof (Hbnd_xs _ _ Hy Hk_eq) as Hk_bound.
+               assert (Hj_le: j <= k).
+               { apply fib_eq_le_index; try assumption.
+                 rewrite Hj, Hk_eq. reflexivity. }
+               apply not_consecutive_if_gap with (a := n + 3) (b := j); lia.
+             - exact Hnocons_xs.
+           }
+           { (* Sorted property *)
+             simpl.
+             destruct xs as [|y ys]; simpl; auto.
+             split.
+             - specialize (Hfib_xs y (or_introl eq_refl)) as [k [Hk_ge Hk_eq]].
+               pose proof (Hbnd_xs _ _ (or_introl eq_refl) Hk_eq) as Hk_le.
+               rewrite <- Hk_eq.
+               apply fib_mono_lt; try lia.
+             - exact Hsorted_xs.
+           }
+        -- (* Index bound for new list *)
+           intros z k Hz Hk_eq.
+           simpl in Hz. destruct Hz as [Hz|Hz].
+           { subst z. rewrite Hk_eq. lia. }
+           { pose proof (Hbnd_xs _ _ Hz Hk_eq) as Hbound.
+             lia. }
+Qed.
 
 Corollary zeck_lists_sum_seq : forall n,
   map sum_list (zeck_lists n) = seq 0 (fib (n + 2)).
@@ -221,32 +325,35 @@ Proof.
   intro n. apply (zeck_lists_invariant n).
 Qed.
 
-(* TODO(codex): Deduce this from [zeck_lists_invariant].
-   - Use nth/length facts to show k stays in bounds.
-   - Extract the representation proof from the invariant.
-   - This is the bridge between the table entry and the formal predicate. *)
 Corollary zeck_lists_entry_repr : forall n k,
   k < fib (n + 2) ->
   is_zeckendorf_repr k (nth k (zeck_lists n) []).
-Proof. Admitted.
+Proof.
+  intros n k Hlt.
+  destruct (zeck_lists_invariant n) as [Hsum Hinvar].
+  assert (Hlen: k < length (zeck_lists n)).
+  { rewrite <- (map_length sum_list (zeck_lists n)).
+    rewrite Hsum. simpl. lia. }
+  assert (Hsum_k: sum_list (nth k (zeck_lists n) []) = k).
+  { rewrite <- (nth_map sum_list (zeck_lists n) [] 0) by assumption.
+    rewrite Hsum.
+    apply nth_seq_0. lia. }
+  assert (Hin: In (nth k (zeck_lists n) []) (zeck_lists n)).
+  { apply nth_In. assumption. }
+  specialize (Hinvar _ Hin) as [[Hfib [Hsum_prop [Hnocons Hsorted]]] Hbnd].
+  rewrite Hsum_k in Hsum_prop.
+  repeat split; try assumption.
+Qed.
 
-(* TODO(codex): Simple arithmetic identity.
-   - Split on m=0 separately.
-   - For m+1>=1, use the reasoning that pred(S m) = m and unfold fib definitions. *)
 Lemma fib_pred_plus_two : forall m,
   fib (Nat.pred m + 2) = fib (m + 1).
 Proof.
   intro m.
-  destruct m as [|m']; simpl; auto.
-  assert (H : m' + 2 = S m' + 1) by lia.
-  rewrite H.
+  destruct m; simpl; auto.
+  replace (Nat.pred (S m) + 2)%nat with (m + 1)%nat by lia.
   reflexivity.
 Qed.
 
-(* TODO(codex): Prove this by induction on the budget [b].
-   - Base case: once k caught up to n+1 we know fib(n+2) > n.
-   - Step: leverage the recursive call when fib(S k) <= n, otherwise we
-     exit with the desired inequality. *)
 Lemma find_fib_index_aux_spec : forall n k b,
   k <= n + 1 ->
   b = n + 1 - k ->
@@ -255,38 +362,41 @@ Proof.
   intros n k b Hk Hb.
   revert k Hk Hb.
   induction b as [|b IH]; intros k Hk Hb.
-  - assert (k = n + 1) by lia. subst k.
-    unfold find_fib_index_aux.
-    replace (S (n + 1)) with (n + 2) by lia.
+  - simpl in Hb.
+    assert (k = n + 1) by lia. subst k.
+    simpl. replace (S (n + 1)) with (n + 2) by lia.
     apply fib_n_plus_two_gt_n.
   - simpl in Hb.
-    unfold find_fib_index_aux; fold find_fib_index_aux.
-    destruct (Nat.leb_spec (fib (S k)) n) as [Hle | Hgt].
-    + eapply IH with (k := S k); lia.
+    destruct (Nat.leb_spec0 (fib (S k)) n) as [Hle | Hgt].
+    + eapply IH with (k := S k).
+      * lia.
+      * lia.
     + exact Hgt.
 Qed.
 
-
-(* TODO(codex): Direct corollary: instantiate [find_fib_index_aux_spec]
-   with k=0 and b=S n to obtain the witness used by [zeck]. *)
 Lemma min_level_for_index_spec : forall n,
   fib (min_level_for_index n + 1) > n.
 Proof.
   intro n.
   unfold min_level_for_index.
-  replace (find_fib_index_aux n 0 (S n) + 1) with (S (find_fib_index_aux n 0 (S n))) by lia.
   apply find_fib_index_aux_spec; lia.
 Qed.
 
-(* TODO(codex): Combine [min_level_for_index_spec] with
-   [zeck_lists_entry_repr]; remember zeck grabs nth n in zeck_lists (m-1),
-   so we must show fib(depth+2) > n, then apply the entry lemma. *)
 Lemma zeck_is_zeckendorf : forall n,
   is_zeckendorf_repr n (zeck n).
-Proof. Admitted.
-
-
-
+Proof.
+  intro n.
+  unfold zeck.
+  set (m := min_level_for_index n).
+  set (depth := Nat.pred m).
+  assert (Hbound: n < fib (depth + 2)).
+  { subst depth.
+    rewrite fib_pred_plus_two.
+    apply min_level_for_index_spec.
+  }
+  apply (zeck_lists_entry_repr depth n).
+  exact Hbound.
+Qed.
 
 (*
   Main equivalence theorem: zeck produces the same output as zeckendorf
