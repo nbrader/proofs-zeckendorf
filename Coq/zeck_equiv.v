@@ -151,6 +151,7 @@ Proof.
     reflexivity.
 Qed.
 
+(* Small Fibonacci algebra facts used to keep the main proof readable. *)
 Lemma fib_plus_three : forall n,
   fib (n + 3) = fib (n + 2) + fib (n + 1).
 Proof.
@@ -171,6 +172,9 @@ Proof.
   apply fib_plus_three.
 Qed.
 
+(* Program Fixpoint introduces a nested match when unfolding fib indices.
+   This lemma massaging that pattern back into [fib (n+3)] keeps the
+   invariant proof manageable. *)
 Lemma simplify_nested_fib_match : forall n,
   match n + 2 with
   | 0 => 1
@@ -373,10 +377,8 @@ Proof.
   intro n. apply (zeck_lists_invariant n).
 Qed.
 
-(* TODO(codex): Deduce this from [zeck_lists_invariant].
-   - Use nth/length facts to show k stays in bounds.
-   - Extract the representation proof from the invariant.
-   - This is the bridge between the table entry and the formal predicate. *)
+(* Each table entry inherits the full Zeckendorf predicate from
+   [zeck_lists_invariant]; this corollary packages the bookkeeping. *)
 Corollary zeck_lists_entry_repr : forall n k,
   k < fib (n + 2) ->
   is_zeckendorf_repr k (nth k (zeck_lists n) []).
@@ -397,9 +399,7 @@ Proof.
   repeat split; try assumption.
 Qed.
 
-(* TODO(codex): Simple arithmetic identity.
-   - Split on m=0 separately.
-   - For m+1>=1, use the reasoning that pred(S m) = m and unfold fib definitions. *)
+(* Simple arithmetic fact about shifting indices inside a predecessor. *)
 Lemma fib_pred_plus_two : forall m,
   fib (Nat.pred m + 2) = fib (m + 1).
 Proof.
@@ -410,10 +410,8 @@ Proof.
   reflexivity.
 Qed.
 
-(* TODO(codex): Prove this by induction on the budget [b].
-   - Base case: once k caught up to n+1 we know fib(n+2) > n.
-   - Step: leverage the recursive call when fib(S k) <= n, otherwise we
-     exit with the desired inequality. *)
+(* The auxiliary search used by [min_level_for_index] always stops at a
+   Fibonacci strictly larger than [n]; proved by induction on the fuel. *)
 Lemma find_fib_index_aux_spec : forall n k b,
   k <= n + 1 ->
   b = n + 1 - k ->
@@ -433,8 +431,8 @@ Proof.
     + exact Hgt.
 Qed.
 
-(* TODO(codex): Direct corollary: instantiate [find_fib_index_aux_spec]
-   with k=0 and b=S n to obtain the witness used by [zeck]. *)
+(* Direct corollary for the specific initial parameters of
+   [min_level_for_index]. *)
 Lemma min_level_for_index_spec : forall n,
   fib (min_level_for_index n + 1) > n.
 Proof.
@@ -444,9 +442,8 @@ Proof.
   apply find_fib_index_aux_spec; lia.
 Qed.
 
-(* TODO(codex): Combine [min_level_for_index_spec] with
-   [zeck_lists_entry_repr]; remember zeck grabs nth n in zeck_lists (m-1),
-   so we must show fib(depth+2) > n, then apply the entry lemma. *)
+(* The fast [zeck] algorithm reuses the table entry and therefore inherits
+   the Zeckendorf predicate established above. *)
 Lemma zeck_is_zeckendorf : forall n,
   is_zeckendorf_repr n (zeck n).
 Proof.
