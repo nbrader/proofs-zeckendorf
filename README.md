@@ -42,6 +42,23 @@ make cleanall           # remove artifacts + timing files
 The project targets Coq 8.18.0 (see `Coq/Makefile`). All files live under the
 `Zeckendorf` namespace as configured in `_CoqProject`.
 
+## Program extraction
+
+`Coq/zeck.v` carries Coq’s extraction directives (via `ExtrHaskellBasic` and
+`ExtrHaskellNatInteger`) so building the file emits a Prelude-friendly Haskell
+module:
+
+```bash
+cd Coq
+make zeck.vo          # regenerates ../Haskell/extracted_zeck.hs
+```
+
+The extracted module (`Haskell/extracted_zeck.hs`) defines
+`Extracted_zeck.zeck :: Integer -> [Integer]`, sharing `Prelude`’s `[]`, `Integer`,
+arithmetic, and comparison operators. Re-run the build whenever `zeck.v`
+changes to keep the Haskell artifact up to date; CI (`.github/workflows/zeck-extraction.yml`)
+runs the same command to guard against drift.
+
 ## Haskell quick start
 
 ```bash

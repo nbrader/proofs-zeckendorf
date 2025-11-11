@@ -1,0 +1,26 @@
+name: Coq Extraction
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  zeck-extraction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild zeck extraction with Coq 8.18
+        run: >
+          docker run --rm
+          -v "${{ github.workspace }}:/workspace"
+          -w /workspace/Coq
+          coqorg/coq:8.18.0
+          bash -lc "make zeck.vo"
+
+      - name: Ensure extracted files are up to date
+        run: |
+          git status --short
+          git diff --exit-code

@@ -2,6 +2,8 @@ Require Import Coq.Arith.Le.
 Require Import Coq.Lists.List.
 Import ListNotations.
 
+From Coq Require Import Extraction ExtrHaskellBasic ExtrHaskellNatInteger.
+
 Require Import Zeckendorf.zeckendorf.
 
 Fixpoint zeck_lists (n : nat) : list (list nat) :=
@@ -52,3 +54,6 @@ Definition zeck (n : nat) : list nat :=
   let m := min_level_for_index n in
   let all := zeck_lists (m-1) in
   nth n all [].
+
+Extraction Language Haskell.
+Extraction "../Haskell/extracted_zeck.hs" zeck.
