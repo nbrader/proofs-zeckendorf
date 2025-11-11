@@ -138,13 +138,19 @@ Proof.
     rewrite Heq in Hfib_lt. lia.
 Qed.
 
-(* TODO(codex): Prove this by complete induction on n using [nat_ind2].
-   - Base cases n=0,1 are already unfolded; keep proofs short.
-   - Step case should reuse the invariant for n and n+1, then show
-     the concatenation and mapped block preserve (1) the enumeration
-     of sums and (2) the Zeckendorf predicate + index bounds.
-   - Useful facts already available: [seq_map_shift], [map_sum_cons],
-     monotonicity of fib, and the helper lemmas near the top of this file. *)
+Lemma seq_app : forall start len1 len2,
+  seq start len1 ++ seq (start + len1) len2 = seq start (len1 + len2).
+Proof.
+  intros start len1 len2.
+  revert start.
+  induction len1 as [|len1 IH]; intros start.
+  - simpl. replace (start + 0) with start by lia. reflexivity.
+  - simpl. f_equal.
+    rewrite <- IH.
+    replace (S start + len1) with (start + S len1) by lia.
+    reflexivity.
+Qed.
+
 Lemma zeck_lists_invariant :
   forall n,
     map sum_list (zeck_lists n) = seq 0 (fib (n + 2)) /\
@@ -164,53 +170,37 @@ Proof.
   - split.
     + reflexivity.
     + intros l Hl.
-      destruct Hl as [Hl|Hl']; [subst l|].
-      { split.
+      simpl in Hl.
+      destruct Hl as [Heq1|[Heq2|[]]]; subst l.
+      * split; [repeat split; simpl; auto; intros z Hz; inversion Hz|intros z k Hz _; inversion Hz].
+      * split.
         { split.
-          { intros z Hz. inversion Hz. }
+          {intros z Hz.
+           simpl in Hz. destruct Hz as [Hz|[]]. subst z.
+           exists 2. split; [lia|reflexivity]. }
           split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
-        { intros z k Hz _. inversion Hz. } }
-      destruct Hl' as [Hl|Hempty]; [subst l|destruct Hempty].
-      (* From last_attempt.v: Full proof for both remaining cases of n=1
-         * Case: l = []
-           split.
-           -- split.
-              ++ intros z Hz. inversion Hz.
-              ++ split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]].
-           -- intros z k Hz _. inversion Hz.
-         * Case: l = [1]
-           split.
-           -- split.
-              ++ intros z Hz.
-                 simpl in Hz. destruct Hz as [Hz|[]]. subst z.
-                 exists 2. split; [lia|reflexivity].
-              ++ split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]].
-           -- intros z k Hz Hfib.
-              simpl in Hz. destruct Hz as [Hz|[]]; subst z.
-              ++ destruct k as [|k1]; simpl in Hfib; try lia.
-                 destruct k1 as [|k2]; simpl in Hfib; try lia.
-                 destruct k2 as [|k3]; simpl in Hfib; try lia.
-                 simpl in Hfib.
-                 assert (Hpos1 : fib (S (S k3)) > 0) by (apply fib_pos; lia).
-                 assert (Hpos2 : fib (S k3) > 0) by (apply fib_pos; lia).
-                 assert (Hge1 : fib (S (S k3)) >= 1) by lia.
-                 assert (Hge2 : fib (S k3) >= 1) by lia.
-                 assert (Hsum_ge : fib (S (S k3)) + fib (S k3) >= 2) by lia.
-                 exfalso.
-                 rewrite Hfib in Hsum_ge. inversion Hsum_ge.
-              ++ inversion Hz.
-      *)
-      all: admit.
+        { intros z k Hz Hfib.
+          simpl in Hz. destruct Hz as [Hz|[]]; subst z.
+          destruct k as [|[|[|k3]]]; try (simpl in Hfib; lia).
+          exfalso.
+          destruct k3 as [|k4]; simpl in Hfib; lia. }
   - intros n [Hsum_n Hinv_n] [Hsum_Sn Hinv_Sn].
     split.
-    + (* Proof that map sum_list equals the sequence *)
-      simpl.
-      rewrite map_app, Hsum_Sn, map_sum_cons, Hsum_n.
+    + simpl.
+      rewrite map_app.
+      simpl in Hsum_Sn. rewrite Hsum_Sn.
+      rewrite map_sum_cons, Hsum_n.
+      replace (S n + 2) with (n + 3) in * by lia.
       rewrite seq_map_shift with (len := fib (n + 2)) (start := 0) (offset := fib (n + 3)).
-      (* Need: seq (0 + fib (n + 3)) (fib (n + 2)) ++ seq 0 (fib (n + 3))
-               = seq 0 (fib (n + 4)) *)
-      (* This requires seq_app or similar lemma about sequence concatenation *)
-      admit. (* TODO: Need seq_app lemma or prove concatenation manually *)
+      rewrite Nat.add_0_r.
+      replace (seq 0 (fib (n + 3)) ++ seq (fib (n + 3)) (fib (n + 2)))
+        with (seq 0 (fib (n + 4))).
+      * reflexivity.
+      * rewrite <- (seq_app 0 (fib (n + 3)) (fib (n + 2))).
+        f_equal; [|f_equal; lia].
+        replace (n + 4)%nat with (S (S n) + 2)%nat by lia.
+        replace (n + 3)%nat with (S (n + 2)) by lia.
+        rewrite fib_SS. lia.
     + intros l Hl.
       simpl in Hl.
       apply in_app_or in Hl.
@@ -218,59 +208,56 @@ Proof.
       * specialize (Hinv_Sn _ Hin1) as [Hrepr Hbnd].
         split; [exact Hrepr|].
         intros z k Hz Hzfib.
-        specialize (Hbnd z k Hz Hzfib).
-        lia.
-      * (* Case: l is in the mapped list *)
-        (* From last_attempt.v: Full proof structure
-           apply in_map_iff in Hin2.
-           destruct Hin2 as [xs [-> Hxs]].
-           specialize (Hinv_n _ Hxs) as [Hrepr_xs Hbnd_xs].
-           destruct Hrepr_xs as [Hfib_xs [Hsum_xs [Hnocons_xs Hsorted_xs]]].
+        apply Hbnd; assumption.
+      * apply in_map_iff in Hin2.
+        destruct Hin2 as [xs [-> Hxs]].
+        specialize (Hinv_n _ Hxs) as [Hrepr_xs Hbnd_xs].
+        destruct Hrepr_xs as [Hfib_xs [Hsum_xs [Hnocons_xs Hsorted_xs]]].
+        split.
+        -- (* is_zeckendorf_repr for fib (n+3) :: xs *)
            split.
-           -- (* is_zeckendorf_repr for fib (n+3) :: xs *)
-              split.
-              { (* Fib property: Show each element is a Fibonacci number *)
-                intros z Hz. simpl in Hz. destruct Hz as [Hz|Hz].
-                - subst z. exists (n + 3). split; lia.
-                - apply Hfib_xs in Hz.
-                  destruct Hz as [k [Hk_ge Hk_eq]].
-                  exists k. split; assumption.
-              }
-              split.
-              { (* Sum property: Shows sum equals expected value *)
-                simpl. reflexivity.
-              }
-              split.
-              { (* No consecutive property: No consecutive Fibonacci indices *)
-                simpl. split.
-                - intros y Hy i j Hi Hj Hcons. subst.
-                  specialize (Hfib_xs y Hy) as [k [Hk_ge Hk_eq]].
-                  pose proof (Hbnd_xs _ _ Hy Hk_eq) as Hk_bound.
-                  assert (Hj_le: j <= k).
-                  { apply fib_eq_le_index; try assumption.
-                    rewrite Hj, Hk_eq. reflexivity. }
-                  apply not_consecutive_if_gap with (a := n + 3) (b := j); lia.
-                - exact Hnocons_xs.
-              }
-              { (* Sorted property: List is sorted descending *)
-                simpl.
-                destruct xs as [|y ys]; simpl; auto.
-                split.
-                - specialize (Hfib_xs y (or_introl eq_refl)) as [k [Hk_ge Hk_eq]].
-                  pose proof (Hbnd_xs _ _ (or_introl eq_refl) Hk_eq) as Hk_le.
-                  rewrite <- Hk_eq.
-                  apply fib_mono_lt; try lia.
-                - exact Hsorted_xs.
-              }
-           -- (* Index bound for new list *)
-              intros z k Hz Hk_eq.
-              simpl in Hz. destruct Hz as [Hz|Hz].
-              { subst z. rewrite Hk_eq. lia. }
-              { pose proof (Hbnd_xs _ _ Hz Hk_eq) as Hbound.
-                lia. }
-        *)
-        admit.
-Admitted.
+           { (* Fib property *)
+             intros z Hz.
+             simpl in Hz. destruct Hz as [Hz|Hz].
+             - subst z. exists (n + 3). split; lia.
+             - apply Hfib_xs in Hz.
+               destruct Hz as [k [Hk_ge Hk_eq]].
+               exists k. split; assumption.
+           }
+           split.
+           { (* Sum property *)
+             simpl. reflexivity.
+           }
+           split.
+           { (* No consecutive property *)
+             simpl. split.
+             - intros y Hy i j Hi Hj Hcons.
+               subst.
+               specialize (Hfib_xs y Hy) as [k [Hk_ge Hk_eq]].
+               pose proof (Hbnd_xs _ _ Hy Hk_eq) as Hk_bound.
+               assert (Hj_le: j <= k).
+               { apply fib_eq_le_index; try assumption.
+                 rewrite Hj, Hk_eq. reflexivity. }
+               apply not_consecutive_if_gap with (a := n + 3) (b := j); lia.
+             - exact Hnocons_xs.
+           }
+           { (* Sorted property *)
+             simpl.
+             destruct xs as [|y ys]; simpl; auto.
+             split.
+             - specialize (Hfib_xs y (or_introl eq_refl)) as [k [Hk_ge Hk_eq]].
+               pose proof (Hbnd_xs _ _ (or_introl eq_refl) Hk_eq) as Hk_le.
+               rewrite <- Hk_eq.
+               apply fib_mono_lt; try lia.
+             - exact Hsorted_xs.
+           }
+        -- (* Index bound for new list *)
+           intros z k Hz Hk_eq.
+           simpl in Hz. destruct Hz as [Hz|Hz].
+           { subst z. rewrite Hk_eq. lia. }
+           { pose proof (Hbnd_xs _ _ Hz Hk_eq) as Hbound.
+             lia. }
+Qed.
 
 Corollary zeck_lists_sum_seq : forall n,
   map sum_list (zeck_lists n) = seq 0 (fib (n + 2)).
