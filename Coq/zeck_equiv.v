@@ -18,7 +18,8 @@ Require Import Zeckendorf.zeck.
 
   Strategy:
   1. Show that zeck_lists(m) generates Zeckendorf representations in order
-  2. Prove that nth i (zeck_lists m) = zeckendorf i for appropriate m
+  2. Prove that each entry of zeck_lists already satisfies the Zeckendorf predicate,
+     so zeck n inherits the same representation as n
   3. Conclude that zeck i = zeckendorf i
 
   The key insight: zeck_lists builds a table using dynamic programming where
