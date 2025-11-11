@@ -151,6 +151,89 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma fib_plus_three : forall n,
+  fib (n + 3) = fib (n + 2) + fib (n + 1).
+Proof.
+  intro n.
+  replace (n + 3) with (S (S (n + 1))) by lia.
+  replace (n + 2) with (S (n + 1)) by lia.
+  apply fib_SS.
+Qed.
+
+Lemma fib_sum_succ : forall n,
+  fib (n + 3) + fib (n + 2) = fib (n + 4).
+Proof.
+  intro n.
+  replace (n + 4)%nat with ((n + 1) + 3)%nat by lia.
+  replace (n + 3)%nat with ((n + 1) + 2)%nat by lia.
+  replace (n + 2)%nat with ((n + 1) + 1)%nat by lia.
+  symmetry.
+  apply fib_plus_three.
+Qed.
+
+Lemma simplify_nested_fib_match : forall n,
+  match n + 2 with
+  | 0 => 1
+  | S _ =>
+      match n + 2 with
+      | 0 => 1
+      | S n'' => fib (n + 2) + fib n''
+      end
+  end = fib (n + 3).
+Proof.
+  intro n.
+  assert (Haux : forall k,
+            k >= 2 ->
+            match k with
+            | 0 => 1
+            | S _ =>
+                match k with
+                | 0 => 1
+                | S m => fib k + fib m
+                end
+            end = fib k + fib (k - 1)).
+  { intros k Hk.
+    destruct k as [|[|k']]; try lia; simpl.
+    replace (k' + 1) with (S k') by lia.
+    reflexivity. }
+  assert (Hge : n + 2 >= 2) by lia.
+  rewrite (Haux (n + 2) Hge).
+  replace (n + 2 - 1) with (n + 1) by lia.
+  symmetry.
+  apply fib_plus_three.
+Qed.
+
+Lemma fib_n_plus_three_ge_two : forall n,
+  fib (n + 3) >= 2.
+Proof.
+  intro n.
+  induction n as [|n IH].
+  - simpl. lia.
+  - replace (S n + 3)%nat with (S (S (n + 2))) by lia.
+    rewrite fib_SS.
+    replace (S (n + 2)) with (n + 3) by lia.
+    specialize (IH).
+    lia.
+Qed.
+
+Lemma seq_concat_with_shift : forall a b,
+  seq 0 a ++ map (fun x => a + x) (seq 0 b) = seq 0 (a + b).
+Proof.
+  intros a b.
+  rewrite seq_map_shift with (len := b) (start := 0) (offset := a).
+  replace (a + 0) with (0 + a) by lia.
+  rewrite (seq_app 0 a b).
+  reflexivity.
+Qed.
+
+Lemma seq_app_start0_r : forall len1 len2,
+  seq 0 len1 ++ seq (len1 + 0) len2 = seq 0 (len1 + len2).
+Proof.
+  intros len1 len2.
+  replace (len1 + 0) with (0 + len1) by lia.
+  apply seq_app.
+Qed.
+
 Lemma zeck_lists_invariant :
   forall n,
     map sum_list (zeck_lists n) = seq 0 (fib (n + 2)) /\
@@ -171,36 +254,42 @@ Proof.
     + reflexivity.
     + intros l Hl.
       simpl in Hl.
-      destruct Hl as [Heq1|[Heq2|[]]]; subst l.
-      * split; [repeat split; simpl; auto; intros z Hz; inversion Hz|intros z k Hz _; inversion Hz].
+      destruct Hl as [Hl|[Hl|[]]]; subst l.
+      * split.
+        { repeat split; simpl; auto.
+          intros z Hz. inversion Hz. }
+        { intros z k Hz _. inversion Hz. }
       * split.
         { split.
-          {intros z Hz.
-           simpl in Hz. destruct Hz as [Hz|[]]. subst z.
-           exists 2. split; [lia|reflexivity]. }
+          { intros z Hz.
+            simpl in Hz.
+            destruct Hz as [Hz|[]].
+            symmetry in Hz. subst z.
+            exists 2. split; [lia|reflexivity]. }
           split; [simpl; reflexivity|split; [simpl; split; auto|simpl; auto]]. }
         { intros z k Hz Hfib.
-          simpl in Hz. destruct Hz as [Hz|[]]; subst z.
+          simpl in Hz.
+          destruct Hz as [Hz|[]].
+          symmetry in Hz. subst z.
           destruct k as [|[|[|k3]]]; try (simpl in Hfib; lia).
           exfalso.
           destruct k3 as [|k4]; simpl in Hfib; lia. }
   - intros n [Hsum_n Hinv_n] [Hsum_Sn Hinv_Sn].
     split.
     + simpl.
-      rewrite map_app.
-      simpl in Hsum_Sn. rewrite Hsum_Sn.
-      rewrite map_sum_cons, Hsum_n.
-      replace (S n + 2) with (n + 3) in * by lia.
-      rewrite seq_map_shift with (len := fib (n + 2)) (start := 0) (offset := fib (n + 3)).
-      rewrite Nat.add_0_r.
-      replace (seq 0 (fib (n + 3)) ++ seq (fib (n + 3)) (fib (n + 2)))
-        with (seq 0 (fib (n + 4))).
-      * reflexivity.
-      * rewrite <- (seq_app 0 (fib (n + 3)) (fib (n + 2))).
-        f_equal; [|f_equal; lia].
-        replace (n + 4)%nat with (S (S n) + 2)%nat by lia.
+      rewrite map_app, Hsum_Sn, map_sum_cons, Hsum_n.
+      rewrite simplify_nested_fib_match.
+      replace (S n + 2)%nat with (n + 3)%nat by lia.
+      rewrite seq_concat_with_shift with (a := fib (n + 3)) (b := fib (n + 2)).
+      remember (fib (n + 3) + fib (n + 2)) as total eqn:Htotal.
+      assert (Htotal_eq : total = fib (n + 4)).
+      { subst total.
         replace (n + 3)%nat with (S (n + 2)) by lia.
-        rewrite fib_SS. lia.
+        replace (n + 4)%nat with (S (S (n + 2))) by lia.
+        rewrite fib_SS.
+        reflexivity. }
+      rewrite Htotal_eq.
+      reflexivity.
     + intros l Hl.
       simpl in Hl.
       apply in_app_or in Hl.
@@ -208,9 +297,11 @@ Proof.
       * specialize (Hinv_Sn _ Hin1) as [Hrepr Hbnd].
         split; [exact Hrepr|].
         intros z k Hz Hzfib.
-        apply Hbnd; assumption.
+        specialize (Hbnd _ _ Hz Hzfib).
+        lia.
       * apply in_map_iff in Hin2.
-        destruct Hin2 as [xs [-> Hxs]].
+        destruct Hin2 as [xs [Hhead Hxs]].
+        symmetry in Hhead. subst l.
         specialize (Hinv_n _ Hxs) as [Hrepr_xs Hbnd_xs].
         destruct Hrepr_xs as [Hfib_xs [Hsum_xs [Hnocons_xs Hsorted_xs]]].
         split.
@@ -219,7 +310,7 @@ Proof.
            { (* Fib property *)
              intros z Hz.
              simpl in Hz. destruct Hz as [Hz|Hz].
-             - subst z. exists (n + 3). split; lia.
+             - symmetry in Hz. subst z. exists (n + 3). split; lia.
              - apply Hfib_xs in Hz.
                destruct Hz as [k [Hk_ge Hk_eq]].
                exists k. split; assumption.
@@ -229,16 +320,30 @@ Proof.
              simpl. reflexivity.
            }
            split.
-           { (* No consecutive property *)
-             simpl. split.
-             - intros y Hy i j Hi Hj Hcons.
-               subst.
-               specialize (Hfib_xs y Hy) as [k [Hk_ge Hk_eq]].
-               pose proof (Hbnd_xs _ _ Hy Hk_eq) as Hk_bound.
-               assert (Hj_le: j <= k).
-               { apply fib_eq_le_index; try assumption.
-                 rewrite Hj, Hk_eq. reflexivity. }
-               apply not_consecutive_if_gap with (a := n + 3) (b := j); lia.
+             { (* No consecutive property *)
+               simpl. split.
+                - intros y Hy i j Hi Hj Hcons.
+                 assert (Hi_ge2 : i >= 2).
+                 { destruct i as [|[|i']]; simpl in Hi.
+                   - pose proof (fib_n_plus_three_ge_two n) as Hfib.
+                     rewrite <- Hi in Hfib. lia.
+                   - pose proof (fib_n_plus_three_ge_two n) as Hfib.
+                     rewrite <- Hi in Hfib. lia.
+                   - lia. }
+                 assert (Hi_le : i <= n + 3).
+                 { apply fib_eq_le_index; try lia. }
+                 assert (Hi_ge : n + 3 <= i).
+                 { apply fib_eq_le_index with (j := n + 3) (k := i); try lia. }
+                 assert (Hi_eq : i = n + 3) by lia.
+                 subst i.
+                 specialize (Hfib_xs y Hy) as [k [Hk_ge Hk_eq]].
+                 pose proof (Hbnd_xs _ _ Hy Hk_eq) as Hk_bound.
+                 set (Hk_eq_sym := eq_sym Hk_eq).
+                 assert (Hj_le: j <= k).
+                 { apply fib_eq_le_index; try assumption.
+                   rewrite Hj, Hk_eq_sym. reflexivity. }
+                 assert (Hgap : j + 1 < n + 3) by lia.
+                 destruct Hcons as [H|H]; lia.
              - exact Hnocons_xs.
            }
            { (* Sorted property *)
@@ -247,14 +352,17 @@ Proof.
              split.
              - specialize (Hfib_xs y (or_introl eq_refl)) as [k [Hk_ge Hk_eq]].
                pose proof (Hbnd_xs _ _ (or_introl eq_refl) Hk_eq) as Hk_le.
-               rewrite <- Hk_eq.
+               rewrite Hk_eq.
                apply fib_mono_lt; try lia.
              - exact Hsorted_xs.
            }
         -- (* Index bound for new list *)
            intros z k Hz Hk_eq.
            simpl in Hz. destruct Hz as [Hz|Hz].
-           { subst z. rewrite Hk_eq. lia. }
+           { symmetry in Hz. subst z.
+             symmetry in Hk_eq.
+             enough (k <= n + 3) by lia.
+             apply fib_eq_le_index; try lia. }
            { pose proof (Hbnd_xs _ _ Hz Hk_eq) as Hbound.
              lia. }
 Qed.
