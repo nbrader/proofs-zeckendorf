@@ -105,13 +105,6 @@ Proof.
   exact Hlt.
 Qed.
 
-Lemma not_consecutive_if_gap : forall a b,
-  b + 1 < a ->
-  ~ nat_consecutive a b.
-Proof.
-  intros a b Hgap [H|H]; lia.
-Qed.
-
 Lemma fib_n_plus_two_gt_n : forall n,
   fib (n + 2) > n.
 Proof.
@@ -159,17 +152,6 @@ Proof.
   replace (n + 3) with (S (S (n + 1))) by lia.
   replace (n + 2) with (S (n + 1)) by lia.
   apply fib_SS.
-Qed.
-
-Lemma fib_sum_succ : forall n,
-  fib (n + 3) + fib (n + 2) = fib (n + 4).
-Proof.
-  intro n.
-  replace (n + 4)%nat with ((n + 1) + 3)%nat by lia.
-  replace (n + 3)%nat with ((n + 1) + 2)%nat by lia.
-  replace (n + 2)%nat with ((n + 1) + 1)%nat by lia.
-  symmetry.
-  apply fib_plus_three.
 Qed.
 
 (* Program Fixpoint introduces a nested match when unfolding fib indices.
@@ -228,14 +210,6 @@ Proof.
   replace (a + 0) with (0 + a) by lia.
   rewrite (seq_app 0 a b).
   reflexivity.
-Qed.
-
-Lemma seq_app_start0_r : forall len1 len2,
-  seq 0 len1 ++ seq (len1 + 0) len2 = seq 0 (len1 + len2).
-Proof.
-  intros len1 len2.
-  replace (len1 + 0) with (0 + len1) by lia.
-  apply seq_app.
 Qed.
 
 Lemma zeck_lists_invariant :
@@ -369,12 +343,6 @@ Proof.
              apply fib_eq_le_index; try lia. }
            { pose proof (Hbnd_xs _ _ Hz Hk_eq) as Hbound.
              lia. }
-Qed.
-
-Corollary zeck_lists_sum_seq : forall n,
-  map sum_list (zeck_lists n) = seq 0 (fib (n + 2)).
-Proof.
-  intro n. apply (zeck_lists_invariant n).
 Qed.
 
 (* Each table entry inherits the full Zeckendorf predicate from
