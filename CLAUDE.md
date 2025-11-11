@@ -49,10 +49,10 @@ The `_CoqProject` file defines the logical path mapping:
    - `fibs_upto n`: generates Fibonacci numbers ≤ n
 
 3. **Main Algorithm** (`zeckendorf`, lines 141-167)
-   - Uses `Program Fixpoint` with measure-based termination
+   - Implemented as a structurally recursive `Fixpoint` with an explicit fuel argument
    - Greedy algorithm: repeatedly selects largest Fibonacci number ≤ remaining value
    - Accumulator pattern for building result list
-   - Well-founded recursion proof in `Next Obligation` (lines 154-167)
+   - Termination is justified by decreasing both the `fuel` and the remaining sum
 
 ### Proof Structure
 
@@ -65,25 +65,18 @@ The correctness proof has two main components:
    - `fib_decrease`: termination helper for the main recursion
 
 2. **Correctness Theorems** (lines 177-252)
-   - `zeckendorf_acc_fib`: all elements in result are Fibonacci numbers (ADMITTED)
-   - `zeckendorf_acc_sum`: sum of result equals input (ADMITTED)
-   - `zeckendorf_correct`: combines both properties (lines 243-252)
+   - `zeckendorf_acc_fib`: all elements in the accumulated result are Fibonacci numbers (closed via `zeckendorf_fuel_acc_fib`)
+   - `zeckendorf_acc_sum`: the sum of the output equals the requested integer (closed via `zeckendorf_fuel_acc_sum`)
+   - `zeckendorf_correct`: combines existence and uniqueness using the lemmas above
 
-**Current Status**: The main correctness lemmas (`zeckendorf_acc_fib` and `zeckendorf_acc_sum`) are admitted due to difficulties with Program Fixpoint's internal representation. The infrastructure is in place, but the proofs require functional induction schemes or rewriting using explicit well-founded recursion.
-
-### Key Challenges
-
-The proofs at lines 181-210 are admitted because `Program Fixpoint` generates complex dependent types (using `existT`) that don't match the expected pattern for straightforward unfolding. To complete these proofs, you would need to either:
-- Use functional induction schemes for Program Fixpoint
-- Rewrite using `Function` with explicit well-founded recursion
-- Extract Program-generated equations for the function
+The current Coq development contains no admits; helper lemmas such as `zeckendorf_no_consecutive`, `sum_nonconsec_fibs_bounded_sorted`, and `zeckendorf_sorted` complete the argument.
 
 ## Testing with Haskell
 
 The Haskell implementation (`Haskell/zeckendorf.hs`) provides an executable reference:
 
 ```bash
-# Run with stack
+# Run with stack or a system-wide GHC install
 cd Haskell
 stack ghci zeckendorf.hs
 
@@ -112,7 +105,7 @@ make html
 When modifying proofs:
 1. Use `coqtop` or `coqide` for interactive proof development
 2. The file uses standard library modules: `Lists.List`, `Arith.Arith`, `Wellfounded.*`
-3. Rely on `Program Fixpoint` for measure-based recursion
+3. Remember that `zeckendorf_fuel` is a structurally recursive `Fixpoint` with an explicit fuel argument
 4. **IMPORTANT**: Always test compile after making changes using `cd Coq && make` to ensure the entire development remains valid
 
 ## Important Notes
@@ -121,40 +114,10 @@ When modifying proofs:
 - Working directory for Coq files is `Coq/`
 - Build artifacts (`.vo`, `.vos`, `.vok`, `.glob` files) are generated in the `Coq/` directory
 - The project is under MIT License (see LICENSE file)
-- Rough Working\wiki proof.txt shows an example of a plain english proof in full that this proof Coq proof can borrow from.
+- `docs/notes/wiki-proof*.txt` contains the original plain-English proof and an annotated mapping to the Coq script.
 
-## Latest Updates
+## Current Highlights
 
-### 2025-11-08: zeckendorf_produces_sorted_asc proven
-
-**Status**: ✅ Main proof complete, compiles successfully
-
-- **NEW**: Proved `zeckendorf_produces_sorted_asc` (lines 1181-1228)
-  - Demonstrates that the greedy algorithm produces ascending sorted output
-  - Complete for the main use case (empty accumulator)
-  - Enables `zeckendorf_sorted_produces_sorted_dec` to prove sorted output
-
-- **NEW Supporting Lemmas** (all proven):
-  - `sorted_asc_cons` (line 1041): Prepending smaller element preserves sorting
-  - `sorted_asc_cons_nil` (line 1053): Single element is sorted
-  - `sorted_asc_all_ge_head` (line 1060): All elements ≥ head
-  - `all_acc_gt_largest_fib_le_n` (line 1081): Accumulator elements > largest Fib
-  - `zeckendorf_fuel_sorted_strong` (line 1111): Strong induction with invariant
-
-- **Remaining admits** (non-critical):
-  - Line 1173: Technical Fibonacci bound `n < 2*x` when `x` is largest Fib ≤ `n`
-  - Line 1227: General case with non-empty accumulator (never used in practice)
-
-- **Documentation**: See `PROOF_STATUS_zeckendorf_produces_sorted_asc.md` for detailed status and next steps
-
-### 2025-11-02
-
-- `fib_consecutive` has been renamed to the more general `nat_consecutive`; all callers in `Coq/zeckendorf.v` have been updated and `make` passes.
-- Outstanding admitted proofs (still open):
-  - `zeckendorf_fuel_no_consecutive` (`Coq/zeckendorf.v:790`)
-  - `sum_nonconsec_fibs_bounded` (`Coq/zeckendorf.v:1119`)
-  - `zeckendorf_unique` (`Coq/zeckendorf.v:1156`)
-- Recommended next steps:
-  1. Strengthen the accumulator invariant for the greedy algorithm so the non-consecutive lemma can be completed.
-  2. Finish the inductive argument for `sum_nonconsec_fibs_bounded`, then use it to prove `zeckendorf_unique`.
-  3. Once admits are resolved, rerun `make` (or `coqc`) to ensure the entire development stays closed.
+- `sum_nonconsec_fibs_bounded_sorted` (`Coq/zeckendorf.v:1926-2071`) formalizes the “sum of non-consecutive Fibonacci numbers stays below the next Fib” lemma from the wiki proof and is fully proven.
+- `zeckendorf_sorted` together with `zeckendorf_no_consecutive` and `zeckendorf_sum_property` compose into `zeckendorf_repr_exists` / `zeckendorf_repr_unique`, closing the main theorem with no outstanding admits.
+- `Coq/zeck_equiv.v` shows that the table-based `zeck` implementation agrees with `zeckendorf`, so downstream code can rely on the fast version while inheriting the proven correctness properties.

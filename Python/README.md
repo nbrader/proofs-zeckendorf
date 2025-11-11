@@ -1,12 +1,12 @@
 # Python Test Scripts for Zeckendorf Proof
 
-This directory contains Python scripts that empirically test the properties admitted in the Coq proof of Zeckendorf's theorem.
+This directory contains Python scripts that empirically test the key invariants from the Coq proof of Zeckendorf's theorem. They were originally written while a few lemmas were still admitted and now serve as lightweight regression tests.
 
 ## Scripts
 
 ### test_admitted_goals.py
 
-The main test script that verifies all admitted goals in the Coq proof.
+The main test script that verifies the invariants that were once left admitted (now formally proven) in the Coq proof.
 
 **Tests included:**
 
@@ -82,14 +82,14 @@ python3 test_edge_cases.py
 
 ## Key Findings
 
-All admitted goals in the Coq proof have been empirically verified:
+The scripts cover the same statements proved in Coq and continue to pass:
 
 - ✅ **fib_in_fibs_upto**: Verified for 1,514 cases
 - ✅ **largest_fib_in_fibs_upto**: Verified for 985 cases
 - ✅ **zeckendorf_fuel_no_consecutive_empty**: Verified for 1,000 cases
 - ✅ **Remainder property**: Verified for 1,000 cases (core proof property)
 
-All tests pass with 100% success rate, giving strong empirical evidence that the admitted properties are correct.
+All tests pass with 100% success rate, providing an extra sanity check alongside the formal development.
 
 ## Implementation Notes
 
@@ -97,21 +97,16 @@ The Python implementation mirrors the Coq definitions:
 
 - **fib(n)**: Matches the Coq Fixpoint definition exactly
 - **fibs_upto(n)**: Implements `takeWhile (≤n) (map fib (seq 1 (S n)))`
-- **zeckendorf(n)**: Greedy algorithm matching the Coq Program Fixpoint
+- **zeckendorf(n)**: Greedy algorithm matching the Coq `Fixpoint` definition
 
-The algorithms are tested up to n=100,000 to provide confidence in the correctness of the admitted properties.
+The algorithms are tested up to n=100,000 to provide confidence in the correctness of the targeted properties.
 
 ## What This Means for the Proof
 
 These tests provide empirical evidence that:
 
-1. The admitted lemmas are likely correct
+1. The critical lemmas behave exactly as specified
 2. The proof strategy is sound
-3. Completing the formal Coq proofs should be straightforward, as the underlying mathematics is verified
+3. Future refactors can rely on executable examples for quick feedback
 
-The main remaining work in the Coq proof is to formally prove these properties using:
-- Induction on the structure of `takeWhile` and `fibs_upto`
-- Properties of monotonic sequences
-- Well-founded recursion arguments
-
-These Python tests serve as a sanity check and give confidence that the effort to complete the formal proofs will succeed.
+They function as sanity checks alongside the formally verified Coq development.

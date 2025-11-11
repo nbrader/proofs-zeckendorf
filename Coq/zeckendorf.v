@@ -16,7 +16,7 @@ Import ListNotations.
   ==============================================================================
 
   This file contains a formal proof of Zeckendorf's theorem in Coq, following
-  the structure of the standard proof (see "Rough Working/wiki proof.txt").
+  the structure of the standard proof (see "docs/notes/wiki-proof.txt").
 
   ZECKENDORF'S THEOREM states that every positive integer can be represented
   uniquely as a sum of non-consecutive Fibonacci numbers.
@@ -55,7 +55,7 @@ Import ListNotations.
      Main theorem: zeckendorf_unique_sorted
      Status: Fully proven, no admits
 
-  See "Rough Working/wiki proof.txt" for the informal proof this formalizes.
+  See "docs/notes/wiki-proof.txt" for the informal proof this formalizes.
 *)
 
 Fixpoint fib (n : nat) : nat :=
@@ -306,7 +306,7 @@ Qed.
 
   The following functions implement the greedy algorithm for constructing
   Zeckendorf representations, directly corresponding to the inductive proof
-  strategy from the wiki proof (see "Rough Working/wiki proof.txt" lines 7).
+  strategy from the wiki proof (see "docs/notes/wiki-proof.txt" lines 7).
 
   Wiki proof strategy recap:
   - Pick the largest Fibonacci number F_j ≤ n
@@ -567,7 +567,7 @@ Qed.
   This section proves the EXISTENCE part of Zeckendorf's theorem:
   "Every positive integer n has a Zeckendorf representation."
 
-  Corresponds to wiki proof lines 4-7 (see "Rough Working/wiki proof.txt").
+  Corresponds to wiki proof lines 4-7 (see "docs/notes/wiki-proof.txt").
 
   Wiki proof structure:
   - Use strong induction on n
@@ -1616,7 +1616,7 @@ Qed.
   This section proves the UNIQUENESS part of Zeckendorf's theorem:
   "No positive integer has two different Zeckendorf representations."
 
-  Corresponds to wiki proof lines 9-19 (see "Rough Working/wiki proof.txt").
+  Corresponds to wiki proof lines 9-19 (see "docs/notes/wiki-proof.txt").
 
   Wiki proof structure:
   1. Take two representations S and T with the same sum
